@@ -1,3 +1,13 @@
+---
+title: Advanced Enterprise Email Triage
+emoji: 📧
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Advanced-Enterprise-Email-Triage-OpenEnv
 
 > **Meta PyTorch OpenEnv Hackathon 2026 — Scaler Round 1 Submission**
