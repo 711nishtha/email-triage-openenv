@@ -52,7 +52,7 @@ Use this panel to process the current email. Select an **Action Type** at the to
 ### Advanced Settings:
 - **Additional Triage Details**: Expand this to manually override Category, Priority, and Route simultaneously.
 - **Confidence Score**: A slider (0.0 to 1.0) to indicate how sure you are about your decision. This is logged for performance analysis.
-- ** Submit Action**: Click this to process the email. The UI will then load the next email in the inbox.
+- **Submit Action**: Click this to process the email. The UI will then load the next email in the inbox.
 
 ---
 
