@@ -1,11 +1,6 @@
 # ============================================================
 # Dockerfile — Advanced Enterprise Email Triage OpenEnv
-# Compatible with Hugging Face Spaces Docker SDK
-# Exposes port 7860
-#
-# SECURITY: No API keys, tokens, or secrets are copied into
-# this image. All credentials must be provided at runtime via
-# environment variables (HF Space Secrets or docker -e flags).
+# Optimized for HF Spaces and mandatory validator compliance
 # ============================================================
 
 # ── Stage 1: Builder ─────────────────────────────────────────────────────────
@@ -13,36 +8,27 @@ FROM python:3.11-slim AS builder
 
 WORKDIR /build
 
-# Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy only requirements first for layer caching
 COPY requirements.txt .
-
-# Install Python dependencies into a prefix
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 
 # ── Stage 2: Runtime ─────────────────────────────────────────────────────────
 FROM python:3.11-slim AS runtime
 
-# Install curl for health checks and start script
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Non-root user for HF Spaces security best practice
 RUN useradd --create-home --shell /bin/bash appuser
 
 WORKDIR /app
 
-# Copy installed packages from builder
 COPY --from=builder /install /usr/local
 
-# Copy application source
-# NOTE: .dockerignore prevents .env, secrets, and __pycache__ from being copied
 COPY models.py .
 COPY data.py .
 COPY tools.py .
@@ -55,28 +41,22 @@ COPY inference.py .
 COPY ui_streamlit/ ./ui_streamlit/
 COPY server/ ./server/
 
-# Set ownership
 RUN chown -R appuser:appuser /app
+RUN chmod +x start.sh
 
-# Switch to non-root user
 USER appuser
 
-# Expose ports: 7860 for Streamlit UI, 8000 for FastAPI backend
+# Standard OpenEnv port
 EXPOSE 7860
-EXPOSE 8000
 
-# Health check
+# Health check hits the FastAPI health endpoint directly on 7860
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD curl --fail http://localhost:7860/_stcore/health
+    CMD curl --fail http://localhost:7860/health || exit 1
 
-# Environment defaults (non-secret — safe to bake in)
 ENV HOST=0.0.0.0
 ENV PORT=7860
-ENV BACKEND_URL=http://localhost:8000
-ENV LOG_LEVEL=info
+ENV BACKEND_URL=http://localhost:7860
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
-# Start both backend and UI
 CMD ["./start.sh"]
-

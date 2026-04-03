@@ -6,19 +6,10 @@ name: Advanced-Enterprise-Email-Triage-OpenEnv
 version: "1.0.0"
 description: >
   A production-grade enterprise email triage environment for AI agents.
-  Tasks span single-email classification to complex mixed inboxes with
-  phishing detection, thread reasoning, and business-impact routing.
+  Tasks span single-email classification to complex mixed inboxes.
 
 author: "OpenEnv Hackathon 2026 Submission"
 license: MIT
-tags:
-  - email
-  - triage
-  - nlp
-  - safety
-  - enterprise
-  - security
-  - routing
 
 # ── Environment endpoints ────────────────────────────────────────────────────
 server:
@@ -26,136 +17,34 @@ server:
   host: "0.0.0.0"
   port: 7860
   endpoints:
-    reset:
-      method: POST
-      path: /reset
-      description: >
-        Reset the environment to a fresh episode.
-        Optionally specify task_id ("easy", "medium", "hard") in the request body.
-      request_schema: ResetRequest
-      response_schema: EmailObservation
-
-    step:
-      method: POST
-      path: /step
-      description: >
-        Submit one agent action and receive the next observation,
-        reward, done flag, and info dict.
-      request_schema: TriageAction
-      response_schema: StepResponse
-
-    state:
-      method: GET
-      path: /state
-      description: Return the full current environment state.
-      response_schema: EnvironmentState
-
-    health:
-      method: GET
-      path: /health
-      description: Liveness probe.
+    reset: { method: POST, path: /reset }
+    step: { method: POST, path: /step }
+    state: { method: GET, path: /state }
+    health: { method: GET, path: /health }
 
 # ── Action space ─────────────────────────────────────────────────────────────
 action_space:
   type: structured
   schema: TriageAction
-  action_types:
-    - name: triage
-      description: Assign priority, category, and routing to a specific email.
-      required_fields: [email_id, priority, category, route_to]
-      optional_fields: [reasoning]
-
-    - name: use_tool
-      description: Call a mock safe tool (calendar, kb_search, sender_lookup).
-      required_fields: [tool_name, tool_params]
-
-    - name: escalate
-      description: Escalate an email directly to security or executive team.
-      required_fields: [email_id, escalation_target, escalation_reason]
-
-    - name: done
-      description: Signal the agent is finished with the current episode.
-
-# ── Observation space ────────────────────────────────────────────────────────
-observation_space:
-  type: structured
-  schema: EmailObservation
-  fields:
-    task_id:
-      type: string
-      description: Task identifier (easy | medium | hard)
-    step:
-      type: integer
-      description: Current step number (0-indexed)
-    max_steps:
-      type: integer
-      description: Maximum steps allowed per episode
-    inbox:
-      type: array
-      items: EmailMessage
-      description: List of email messages to triage
-    thread_history:
-      type: object
-      description: Map of thread_id to list of prior EmailMessage objects
-    sender_profiles:
-      type: object
-      description: Map of sender address to SenderProfile metadata
-    available_tools:
-      type: array
-      items: string
-      description: Tool names available this step
-    current_score:
-      type: float
-      description: Cumulative reward earned so far
-    warnings:
-      type: array
-      items: string
-      description: Safety warnings already triggered
-    done:
-      type: boolean
 
 # ── Tasks ────────────────────────────────────────────────────────────────────
 tasks:
   - id: easy
     name: "Morning Inbox Clear"
-    difficulty: easy
-    description: >
-      Single unambiguous email from a known internal sender.
-      No thread context, no tools required. Test: priority, category, route.
     max_steps: 5
-    min_score_to_pass: 0.60
-    grader: EasyTaskGrader
-
   - id: medium
-    name: "Batch Triage with Thread Context"
-    difficulty: medium
-    description: >
-      Five emails including thread continuations, a calendar-check item,
-      and a vendor KB lookup. Rewards thread-aware routing and tool efficiency.
+    name: "Batch Triage"
     max_steps: 15
-    min_score_to_pass: 0.50
-    grader: MediumTaskGrader
-
   - id: hard
-    name: "Threat Inbox — Phishing, Urgency, Ambiguity"
-    difficulty: hard
-    description: >
-      Eight mixed emails: phishing, BEC, real security incident, legitimate
-      urgent, noisy newsletters. Requires safety guardrails and judgment.
+    name: "Threat Inbox"
     max_steps: 25
-    min_score_to_pass: 0.40
-    grader: HardTaskGrader
 
 # ── Reward bounds ────────────────────────────────────────────────────────────
 reward:
-  min: -1.0
+  min: 0.0
   max: 1.0
   normalised: true
-  description: >
-    Dense per-action rewards for correct category/priority/routing.
-    Bonuses for phishing detection and security escalation.
-    Penalties for missed critical emails, undetected phishing, and
-    false positives on legitimate executive emails.
+  description: Dense per-action rewards clamped to [0.0, 1.0].
 
 # ── Runtime constraints ──────────────────────────────────────────────────────
 runtime:

@@ -5,6 +5,9 @@ uvicorn[standard]==0.30.6
 # Data validation
 pydantic==2.8.2
 
+# OpenEnv Compliance
+openenv-core>=0.1.0
+
 # OpenAI client (used in inference.py)
 openai==1.51.0
 
