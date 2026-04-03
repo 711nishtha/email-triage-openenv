@@ -60,9 +60,25 @@ advanced-enterprise-email-triage/
 ├── inference.py        # OpenAI agent runner (exact hackathon log format)
 ├── Dockerfile
 ├── .dockerignore
+├── ui_streamlit/
+│   ├── app.py          # Streamlit UI
+│   └── requirements.txt
 └── server/
     └── app.py          # FastAPI server exposing /reset, /step, /state
 ```
+
+---
+
+## Interactive User Interface
+
+A professional Streamlit UI is provided for manual triage, performance monitoring, and environment testing.
+
+### Features
+- **Task Selection**: Switch between Easy, Medium, and Hard tasks.
+- **Email Viewer**: Rich display of email content, thread history, and sender profiles.
+- **Action Panel**: Perform triage actions (Categorize, Route, Flag, Respond, Escalate, Ignore).
+- **Live Feedback**: Real-time reward signals and grader feedback.
+- **Tool Integration**: Trigger mock tools directly from the UI.
 
 ---
 
@@ -238,7 +254,15 @@ python inference.py --task medium
 python inference.py --task hard
 ```
 
-### 5. Validate OpenEnv spec
+### 5. Run the Streamlit UI
+
+```bash
+# In a new terminal (while backend is running)
+pip install -r ui_streamlit/requirements.txt
+streamlit run ui_streamlit/app.py
+```
+
+### 6. Validate OpenEnv spec
 
 ```bash
 openenv validate openenv.yaml
@@ -273,6 +297,17 @@ docker run -p 7860:7860 \
    - `HF_TOKEN` (if private model access needed)
 4. The Space auto-builds from `Dockerfile` and exposes port `7860`
 5. `/reset`, `/step`, `/state` endpoints become available at your Space URL
+
+---
+
+## Deploying the UI to HF Spaces
+
+The Streamlit UI can be deployed as a separate **Streamlit** Space:
+
+1. Create a new **Streamlit** Space on Hugging Face
+2. Upload the `ui_streamlit/` folder contents or point to it
+3. Set the **Secret** `BACKEND_URL` in Space Settings to your Backend Space URL (e.g., `https://your-backend.hf.space`)
+4. The UI will automatically connect to your environment API.
 
 ---
 

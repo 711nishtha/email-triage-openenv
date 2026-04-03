@@ -28,6 +28,11 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 # ── Stage 2: Runtime ─────────────────────────────────────────────────────────
 FROM python:3.11-slim AS runtime
 
+# Install curl for health checks and start script
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Non-root user for HF Spaces security best practice
 RUN useradd --create-home --shell /bin/bash appuser
 
@@ -44,8 +49,10 @@ COPY tools.py .
 COPY graders.py .
 COPY rewards.py .
 COPY environment.py .
-COPY inference.py .
 COPY openenv.yaml .
+COPY start.sh .
+COPY inference.py .
+COPY ui_streamlit/ ./ui_streamlit/
 COPY server/ ./server/
 
 # Set ownership
@@ -54,28 +61,22 @@ RUN chown -R appuser:appuser /app
 # Switch to non-root user
 USER appuser
 
-# Expose port for HF Spaces
+# Expose ports: 7860 for Streamlit UI, 8000 for FastAPI backend
 EXPOSE 7860
+EXPOSE 8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD python -c "import httpx; httpx.get('http://localhost:7860/health').raise_for_status()"
+    CMD curl --fail http://localhost:7860/_stcore/health
 
 # Environment defaults (non-secret — safe to bake in)
 ENV HOST=0.0.0.0
 ENV PORT=7860
+ENV BACKEND_URL=http://localhost:8000
 ENV LOG_LEVEL=info
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
-# ── Secrets must be provided at runtime via HF Space Secrets or docker -e ──
-# ENV OPENAI_API_KEY is NOT set here
-# ENV API_BASE_URL is NOT set here
-# ENV MODEL_NAME is NOT set here
+# Start both backend and UI
+CMD ["./start.sh"]
 
-# Start the FastAPI server
-CMD ["python", "-m", "uvicorn", "server.app:app", \
-     "--host", "0.0.0.0", \
-     "--port", "7860", \
-     "--log-level", "info", \
-     "--no-access-log"]
