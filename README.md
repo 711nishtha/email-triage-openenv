@@ -23,23 +23,18 @@ pinned: false
 - **GitHub Repository**: [https://github.com/711nishtha/email-triage-openenv](https://github.com/711nishtha/email-triage-openenv)
 - **Hugging Face Space**: [https://huggingface.co/spaces/nishtha711/email-triage-openenv](https://huggingface.co/spaces/nishtha711/email-triage-openenv)
 - **Live Environment API**: `https://nishtha711-email-triage-openenv.hf.space`
+- **Interactive UI**: `https://huggingface.co/spaces/nishtha711/email-triage-openenv` (Built with Streamlit)
 
 ---
 
-## Motivation — The Real Enterprise Gap
+## Platform Overview — Now with Interactive Triage
 
-Every large organisation loses thousands of productive hours each year to poor email triage. Inboxes receive **urgent board-level escalations alongside routine team check-ins, vendor spam, and — increasingly — sophisticated phishing attacks** that impersonate trusted senders. Human triagers suffer from cognitive overload, inconsistency across shifts, and zero memory of prior thread context.
+This platform provides a production-grade enterprise mailbox environment for AI agents and human triagers. It simulates the high-stakes environment of a corporate inbox, complete with:
 
-This OpenEnv environment simulates a **production-grade enterprise mailbox** that an AI agent must triage correctly, safely, and efficiently. It captures:
-
-- **Priority discrimination** — distinguishing a CEO security incident from a newsletter
-- **Thread-aware reasoning** — understanding email chains and prior commitments
-- **Sender importance scoring** — dynamic VIP/domain reputation weighting
-- **Phishing safety guardrails** — detecting spoofed domains, urgency manipulation, credential harvesting
-- **Business-impact routing** — knowing when to escalate vs. delegate vs. archive
-- **Efficiency bonuses** — fewer tool calls = higher score, rewarding focused reasoning
-
-This directly addresses the gap between generic LLM assistants and reliable, auditable enterprise automation.
+- **Hybrid Architecture**: A robust FastAPI backend exposing the OpenEnv spec, paired with a beautiful Streamlit UI for manual testing and monitoring.
+- **Sophisticated Scenarios**: Three tasks (Easy, Medium, Hard) covering everything from routine IT requests to sophisticated Business Email Compromise (BEC) and phishing attacks.
+- **Deep Context**: Thread-aware reasoning, sender reputation scoring, and mock enterprise tools (Calendar, Knowledge Base, Sender Lookup).
+- **Dense Rewards**: Real-time feedback signals to guide agent learning and human performance.
 
 ---
 
@@ -47,40 +42,34 @@ This directly addresses the gap between generic LLM assistants and reliable, aud
 
 ```
 advanced-enterprise-email-triage/
-├── README.md
-├── .env.example
-├── openenv.yaml
-├── requirements.txt
-├── models.py           # Pydantic typed models
-├── data.py             # Synthetic email generator
-├── tools.py            # Mock safe tools (calendar, KB, sender-lookup)
-├── graders.py          # 3 task graders (deterministic scoring)
-├── rewards.py          # Dense reward shaping logic
-├── environment.py      # Core OpenEnv environment (reset/step/state)
-├── inference.py        # OpenAI agent runner (exact hackathon log format)
-├── Dockerfile
-├── .dockerignore
 ├── ui_streamlit/
-│   ├── app.py          # Streamlit UI
+│   ├── app.py          # Professional Streamlit UI
 │   └── requirements.txt
-└── server/
-    └── app.py          # FastAPI server exposing /reset, /step, /state
+├── server/
+│   └── app.py          # FastAPI server (OpenEnv API)
+├── models.py           # Shared Pydantic schemas
+├── data.py             # Synthetic email/profile generator
+├── tools.py            # Mock enterprise tools
+├── graders.py          # Deterministic task graders
+├── rewards.py          # Reward shaping & signals
+├── environment.py      # Core OpenEnv implementation
+├── inference.py        # OpenAI-compatible agent runner
+├── USER_MANUAL.md      # Detailed UI guide
+├── Dockerfile          # Multi-process orchestration
+├── run_all.sh          # Local runner (Backend + UI)
+└── start.sh            # Docker entrypoint script
 ```
 
 ---
 
 ## Interactive User Interface
 
-A professional Streamlit UI is provided for manual triage, performance monitoring, and environment testing.
+The platform now includes a professional interface for manual triage, agent monitoring, and environment debugging.
 
-- **User Manual**: See [USER_MANUAL.md](./USER_MANUAL.md) for a detailed guide on using the interface.
-
-### Features
-- **Task Selection**: Switch between Easy, Medium, and Hard tasks.
-- **Email Viewer**: Rich display of email content, thread history, and sender profiles.
-- **Action Panel**: Perform triage actions (Categorize, Route, Flag, Respond, Escalate, Ignore).
-- **Live Feedback**: Real-time reward signals and grader feedback.
-- **Tool Integration**: Trigger mock tools directly from the UI.
+- **User Manual**: See [USER_MANUAL.md](./USER_MANUAL.md) for a comprehensive guide on UI features.
+- **Task Selection**: Seamlessly switch between difficulty tiers.
+- **Security Guardrails**: Visual warnings for suspicious senders and phishing indicators.
+- **Live Feedback**: Real-time display of rewards and grader signals.
 
 ---
 
@@ -90,15 +79,15 @@ A professional Streamlit UI is provided for manual triage, performance monitorin
 
 ```python
 class EmailObservation(BaseModel):
-    task_id: str                     # Unique task identifier
+    task_id: str                     # Unique task identifier (easy, medium, hard)
     step: int                        # Current step within episode
     max_steps: int                   # Episode budget
-    inbox: List[EmailMessage]        # Emails to triage (1–10 per task)
-    thread_history: Dict[str, List[EmailMessage]]  # thread_id → prior emails
-    sender_profiles: Dict[str, SenderProfile]      # sender → importance metadata
-    available_tools: List[str]       # Tools the agent may call this step
-    current_score: float             # Cumulative reward so far
-    warnings: List[str]              # Safety flags already triggered
+    inbox: List[EmailMessage]        # Emails pending triage
+    thread_history: Dict[str, List[EmailMessage]]  # thread_id → context
+    sender_profiles: Dict[str, SenderProfile]      # sender → reputation/VIP status
+    available_tools: List[str]       # Tools allowed for this task
+    current_score: float             # Cumulative reward (normalized)
+    warnings: List[str]              # Security flags triggered
     done: bool
 ```
 
@@ -108,24 +97,9 @@ class EmailObservation(BaseModel):
 class TriageAction(BaseModel):
     action_type: Literal["triage", "use_tool", "escalate", "done"]
     
-    # For action_type == "triage"
-    email_id: Optional[str]
-    priority: Optional[Literal["critical", "high", "medium", "low", "spam"]]
-    category: Optional[Literal[
-        "security_incident", "executive_request", "hr_matter",
-        "vendor_contract", "it_support", "team_update",
-        "customer_escalation", "phishing", "newsletter", "other"
-    ]]
-    route_to: Optional[str]          # team/person to route to
-    reasoning: Optional[str]         # agent's chain-of-thought
-
-    # For action_type == "use_tool"
-    tool_name: Optional[str]
-    tool_params: Optional[Dict[str, Any]]
-
-    # For action_type == "escalate"
-    escalation_target: Optional[str]
-    escalation_reason: Optional[str]
+    # triage: priority, category, route_to, reasoning
+    # use_tool: tool_name, tool_params
+    # escalate: escalation_target, escalation_reason
 ```
 
 ---
@@ -133,225 +107,82 @@ class TriageAction(BaseModel):
 ## Three Tasks — Difficulty & Description
 
 ### Task 1 — Easy: "Morning Inbox Clear"
-
-**Scenario:** A single clear, unambiguous email arrives from a known internal sender. The subject line, body, and sender domain all give consistent signals. No thread history. No tools needed.
-
-**Agent goal:** Correctly classify the priority and category, then route to the right team.
-
-**Difficulty factors:**
-- No ambiguity
-- No phishing elements
-- No tool use required
-- Single email only
-
-**Grader:** Exact match on priority (30 pts), category (40 pts), route (30 pts). Partial credit for priority adjacency.
-
-**Baseline score:** `0.72` (GPT-4o-mini zero-shot)
-
----
+**Goal:** Basic classification and routing of unambiguous internal emails.
 
 ### Task 2 — Medium: "Batch Triage with Thread Context"
+**Goal:** Manage 5 emails using thread context, calendar checks, and KB lookups.
 
-**Scenario:** Five emails arrive simultaneously. Two are continuations of existing threads (with prior context). One requires a calendar tool check before routing. One is a vendor contract follow-up needing KB lookup.
-
-**Agent goal:** Triage all five emails correctly, use tools appropriately (not excessively), and preserve thread context in routing decisions.
-
-**Difficulty factors:**
-- Thread-aware reasoning required
-- Tool use needed (calendar + KB)
-- Batch ordering matters (urgent first)
-- Sender reputation scoring influences priority
-
-**Grader:** Per-email scoring (category 25%, priority 25%, route 25%) + tool efficiency bonus (25%). Penalty if urgent email processed last.
-
-**Baseline score:** `0.54` (GPT-4o-mini zero-shot)
-
----
-
-### Task 3 — Hard: "Threat Inbox — Phishing, Urgency, Ambiguity"
-
-**Scenario:** Eight emails in a mixed inbox. Two are sophisticated phishing attempts (spoofed CEO domain, fake IT password-reset). One is a genuine critical security incident. One is ambiguous (external board member making an unusual wire-transfer request — classic BEC pattern). Three are legitimate-but-noisy urgent requests. One is a harmless newsletter that mimics urgent formatting.
-
-**Agent goal:** Correctly identify all phishing/BEC emails, escalate the real security incident, avoid false-positive security escalations on legitimate urgent mail, and process the rest with accurate priority/category/routing.
-
-**Difficulty factors:**
-- Phishing detection (spoofed domains, urgency manipulation, credential requests)
-- BEC (Business Email Compromise) recognition
-- False positive avoidance on legitimate urgency
-- Safety escalation path must be used correctly
-- Multiple conflicting urgency signals
-
-**Grader:**
-- Phishing detection: F1 score over phishing labels (40 pts)
-- Security incident escalation: binary correct/miss (20 pts)  
-- Legitimate email accuracy: per-email F1 (30 pts)
-- Safety compliance: penalty if credentials requested and not flagged (−30 pts), bonus for correct BEC identification (+10 pts)
-
-**Baseline score:** `0.31` (GPT-4o-mini zero-shot)
-
----
-
-## Reward Function — Dense Partial Signals
-
-| Signal | Reward |
-|---|---|
-| Correct category | +0.15 per email |
-| Correct priority | +0.10 per email |
-| Correct route | +0.10 per email |
-| Phishing correctly flagged | +0.25 per email |
-| Security incident escalated | +0.30 |
-| BEC pattern flagged | +0.20 |
-| Tool used correctly | +0.05 per call |
-| Tool used unnecessarily | −0.05 per call |
-| Critical email missed (priority=low/spam) | −0.40 |
-| Phishing email not flagged | −0.30 |
-| False positive on legitimate exec email | −0.20 |
-| Credentials clicked / not flagged | −0.50 |
-| Episode completed within step budget | +0.10 |
-| Wrong escalation target | −0.15 |
-
-Total score normalised to **[0.0, 1.0]** per episode.
+### Task 3 — Hard: "Threat Inbox — Phishing & BEC"
+**Goal:** Detect sophisticated phishing, handle Business Email Compromise, and escalate real security incidents while ignoring newsletters.
 
 ---
 
 ## Setup — Local Testing
 
-### Prerequisites
-
-- Python 3.11+
-- Docker (for containerised runs)
-
-### 1. Clone and install
-
+### 1. Clone and Install
 ```bash
-git clone https://github.com/711nishtha/advanced-enterprise-email-triage
-cd advanced-enterprise-email-triage
+git clone https://github.com/711nishtha/email-triage-openenv
+cd email-triage-openenv
+python -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. Configure environment variables
-
+### 2. Configure Environment
 ```bash
 cp .env.example .env
-# Edit .env — fill in your real values (OpenAI, Groq, or Gemini)
-# The inference agent automatically loads these via python-dotenv.
+# Add your OPENAI_API_KEY (or Groq/Gemini key)
 ```
 
-#### Recommended Free Provider: Groq
-For the best free performance, we recommend using [Groq](https://console.groq.com/keys):
-- **API_BASE_URL**: `https://api.groq.com/openai/v1`
-- **MODEL_NAME**: `llama-3.3-70b-versatile`
-
-### 3. Run the FastAPI server
-
+### 3. Run Everything (Local)
+The simplest way to start both the backend and UI:
 ```bash
-uvicorn server.app:app --host 0.0.0.0 --port 7860 --reload
+./run_all.sh
 ```
+- **UI**: `http://localhost:8501`
+- **API**: `http://localhost:7860`
 
-### 4. Run the inference agent
-
+### 4. Run Inference Agent
 ```bash
-python inference.py --task easy
-python inference.py --task medium
-python inference.py --task hard
-```
-
-### 5. Run the Streamlit UI
-
-```bash
-# In a new terminal (while backend is running)
-pip install -r ui_streamlit/requirements.txt
-streamlit run ui_streamlit/app.py
-```
-
-### 6. Validate OpenEnv spec
-
-```bash
-openenv validate openenv.yaml
+python inference.py --task all --base-url http://localhost:7860
 ```
 
 ---
 
-## Docker Build & Run
+## Docker & HF Spaces
 
+### Docker Run (Local)
+The Docker image runs both the FastAPI backend (port 8000) and Streamlit (port 7860).
 ```bash
-# Build
-docker build -t email-triage-env .
-
-# Run (pass env vars — never bake into image)
-docker run -p 7860:7860 \
+docker build -t email-triage-app .
+docker run -p 7860:7860 -p 8000:8000 \
   -e OPENAI_API_KEY=$OPENAI_API_KEY \
-  -e API_BASE_URL=$API_BASE_URL \
-  -e MODEL_NAME=$MODEL_NAME \
-  email-triage-env
+  email-triage-app
 ```
 
----
-
-## HF Spaces Deployment
-
-1. Create a new **Docker** Space on Hugging Face
-2. Push this repository to the Space
-3. Set the following **Secrets** (not variables) in Space Settings:
-   - `OPENAI_API_KEY`
-   - `API_BASE_URL` (optional — defaults to OpenAI)
-   - `MODEL_NAME` (optional — defaults to `gpt-4o-mini`)
-   - `HF_TOKEN` (if private model access needed)
-4. The Space auto-builds from `Dockerfile` and exposes port `7860`
-5. `/reset`, `/step`, `/state` endpoints become available at your Space URL
+### HF Spaces Deployment
+1. Push to a **Docker** Space on Hugging Face.
+2. The `Dockerfile` automatically sets up the hybrid environment.
+3. Access the interactive UI directly on the Space's main page.
 
 ---
 
-## Deploying the UI to HF Spaces
-
-The Streamlit UI can be deployed as a separate **Streamlit** Space:
-
-1. Create a new **Streamlit** Space on Hugging Face
-2. Upload the `ui_streamlit/` folder contents or point to it
-3. Set the **Secret** `BACKEND_URL` in Space Settings to your Backend Space URL (e.g., `https://your-backend.hf.space`)
-4. The UI will automatically connect to your environment API.
-
----
-
-## Judging Criteria Alignment
-
-| Criterion | Weight | How This Env Scores High |
-|---|---|---|
-| **Utility** | 30% | Real enterprise pain point; plug-in ready for corporate IT agents |
-| **Task Quality** | 25% | 3 well-separated difficulty levels; deterministic graders; dense rewards |
-| **Technical Depth** | 20% | Thread-aware context, BEC detection, dynamic sender scoring |
-| **Creativity** | 15% | Phishing F1 grader, BEC heuristics, step-budget efficiency bonus |
-| **Documentation** | 10% | This README; inline docstrings; `.env.example`; security section |
-
----
-
-## Security Practices
-
-> ⚠️ **All credentials are loaded exclusively via environment variables. No secrets are ever hardcoded.**
-
-- `os.getenv()` used throughout — never string literals for keys
-- `.env.example` contains only placeholder values (`your_key_here`)
-- `.dockerignore` excludes `.env`, `*.pem`, `*.key`, `secrets/`
-- `Dockerfile` has no `COPY .env` instruction
-- `inference.py` exits with a clear error message if required env vars are absent
-- No logging of actual credential values — only presence checks are logged
+## Security & Compliance
+- **Zero Secrets Hardcoded**: All credentials loaded via environment variables.
+- **PII Safe**: All email data is synthetically generated; no real user data is used.
+- **Non-Root Runtime**: Docker container runs as `appuser` for enhanced security.
 
 ---
 
 ## Baseline Scores (Groq Llama-3.3-70b)
 
-| Task | Model | Score | Status |
-|---|---|---|---|
-| Easy | Llama-3.3-70b-versatile | 0.795 | ✓ PASS |
-| Medium | Llama-3.3-70b-versatile | 0.847 | ✓ PASS |
-| Hard | Llama-3.3-70b-versatile | 0.787 | ✓ PASS |
+| Task | Score | Status |
+|---|---|---|
+| Easy | 0.7950 | ✓ PASS |
+| Medium | 0.8316 | ✓ PASS |
+| Hard | 0.7897 | ✓ PASS |
 
 ---
 
 ## License
-
 MIT — see `LICENSE` for details.
-
----
-
-*Built for Meta PyTorch OpenEnv Hackathon 2026 by a solo developer. All synthetic email data is fictional. No real PII is used.*
