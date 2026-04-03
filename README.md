@@ -73,6 +73,8 @@ advanced-enterprise-email-triage/
 
 A professional Streamlit UI is provided for manual triage, performance monitoring, and environment testing.
 
+- **User Manual**: See [USER_MANUAL.md](./USER_MANUAL.md) for a detailed guide on using the interface.
+
 ### Features
 - **Task Selection**: Switch between Easy, Medium, and Hard tasks.
 - **Email Viewer**: Rich display of email content, thread history, and sender profiles.
