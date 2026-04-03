@@ -227,16 +227,16 @@ class EmailTriageEnvironment:
     def _handle_triage(self, action: TriageAction) -> Tuple[float, List[str]]:
         """Process a triage decision for an email."""
         if not action.email_id:
-            return -0.05, ["No email_id provided in triage action."]
+            return 0.0, ["No email_id provided in triage action."]
 
         # Find the email
         email = self._get_email(action.email_id)
         if email is None:
-            return -0.05, [f"email_id '{action.email_id}' not found in inbox."]
+            return 0.0, [f"email_id '{action.email_id}' not found in inbox."]
 
         # Prevent double-triaging
         if action.email_id in self._triaged_ids:
-            return -0.02, [f"Email '{action.email_id}' already triaged."]
+            return 0.0, [f"Email '{action.email_id}' already triaged."]
 
         # Calculate reward
         reward, signals = calculate_triage_reward(
@@ -274,13 +274,13 @@ class EmailTriageEnvironment:
     def _handle_tool(self, action: TriageAction) -> Tuple[float, List[str]]:
         """Execute a tool call and return reward."""
         if not action.tool_name:
-            return -0.05, ["No tool_name provided."]
+            return 0.0, ["No tool_name provided."]
 
         if action.tool_name not in AVAILABLE_TOOLS:
-            return -0.05, [f"Unknown tool '{action.tool_name}'."]
+            return 0.0, [f"Unknown tool '{action.tool_name}'."]
 
         if self._available_tools and action.tool_name not in self._available_tools:
-            return -0.05, [f"Tool '{action.tool_name}' not available for task '{self._task_id}'."]
+            return 0.0, [f"Tool '{action.tool_name}' not available for task '{self._task_id}'."]
 
         # Run the tool
         result = run_tool(action.tool_name, action.tool_params or {})
@@ -308,7 +308,7 @@ class EmailTriageEnvironment:
     def _handle_escalate(self, action: TriageAction) -> Tuple[float, List[str]]:
         """Handle a direct escalation action."""
         if not action.email_id:
-            return -0.05, ["No email_id provided in escalate action."]
+            return 0.0, ["No email_id provided in escalate action."]
 
         email = self._get_email(action.email_id)
         reward, signals = calculate_escalation_reward(
@@ -341,10 +341,9 @@ class EmailTriageEnvironment:
         """Handle agent signalling it is finished."""
         untriaged = len(self._pending_ids)
         if untriaged > 0:
-            penalty = untriaged * 0.05
-            return -penalty, [
+            return 0.0, [
                 f"Done action with {untriaged} email(s) still pending. "
-                f"Penalty: -{penalty:.2f}"
+                f"No completion bonus."
             ]
         return 0.0, ["Agent signalled done — all emails processed."]
 
