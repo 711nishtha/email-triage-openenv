@@ -1,10 +1,10 @@
-# 📧 Email Triage OpenEnv — User Manual
+# Email Triage OpenEnv — User Manual
 
 Welcome to the **Advanced Enterprise Email Triage** interactive interface. This guide will help you understand how to use the Streamlit UI to manually triage emails, use tools, and monitor performance.
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 1. **Access the UI**: Open the Streamlit app URL (locally at `http://localhost:7860` or on Hugging Face Spaces).
 2. **Select Difficulty**: In the left sidebar, use the dropdown to choose between **Easy**, **Medium**, or **Hard**.
@@ -12,7 +12,7 @@ Welcome to the **Advanced Enterprise Email Triage** interactive interface. This 
 
 ---
 
-## 📂 Interface Overview
+## Interface Overview
 
 The interface is divided into three main sections:
 1. **Sidebar (Control Panel)**: Episode status, rewards, and task selection.
@@ -21,7 +21,7 @@ The interface is divided into three main sections:
 
 ---
 
-## 📬 1. Email Viewer
+##  1. Email Viewer
 
 This panel displays the email currently at the top of your inbox.
 
@@ -35,7 +35,7 @@ This panel displays the email currently at the top of your inbox.
 
 ---
 
-## 🛠️ 2. Action Panel
+##  2. Action Panel
 
 Use this panel to process the current email. Select an **Action Type** at the top to change the form fields.
 
@@ -52,11 +52,11 @@ Use this panel to process the current email. Select an **Action Type** at the to
 ### Advanced Settings:
 - **Additional Triage Details**: Expand this to manually override Category, Priority, and Route simultaneously.
 - **Confidence Score**: A slider (0.0 to 1.0) to indicate how sure you are about your decision. This is logged for performance analysis.
-- **🚀 Submit Action**: Click this to process the email. The UI will then load the next email in the inbox.
+- ** Submit Action**: Click this to process the email. The UI will then load the next email in the inbox.
 
 ---
 
-## 📝 3. Feedback & History
+##  3. Feedback & History
 
 - **Last Step Feedback**: After every submission, you'll see a color-coded list of "signals."
     - 🟢 **Green**: Correct decisions (Bonus rewards).
@@ -66,7 +66,7 @@ Use this panel to process the current email. Select an **Action Type** at the to
 
 ---
 
-## 🏁 4. Completion Summary
+##  4. Completion Summary
 
 Once all emails are processed or the step limit is reached:
 - **Success Card**: Shows your **Final Score** (normalized 0.0 to 1.0).
