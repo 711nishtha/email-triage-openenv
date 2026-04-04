@@ -1,90 +1,107 @@
 """
-rewards.py — Clamped reward shaping (0.0 to 1.0 only)
-Strictly adheres to non-negative requirement for validator.
+rewards.py — Dense reward computation for the email triage environment.
+
+Aggregates step-level and episode-level rewards.
+All values are clamped to [0.0, 1.0].
 """
 
 from __future__ import annotations
-from typing import Any, Dict, List, Optional, Tuple
-from models import EmailMessage, TriageAction
+from typing import Any, Dict, List, Optional
+from models import EmailWithGroundTruth
+from graders import (
+    compute_step_reward,
+    grade_episode,
+    PENALTY_MISSED_URGENT,
+    PENALTY_PHISHING_MISS,
+)
 
-# ── Reward constants (All non-negative) ───────────────────────────────────────
-R_CORRECT_CATEGORY = 0.20
-R_CORRECT_PRIORITY = 0.15
-R_CORRECT_ROUTE = 0.15
-R_PHISHING_DETECTED = 0.30
-R_SECURITY_ESCALATED = 0.35
-R_BEC_DETECTED = 0.20
-R_TOOL_CORRECT = 0.10
-R_TOOL_UNNECESSARY = 0.0     # Clamped penalty
-R_CRITICAL_MISSED = 0.0      # Clamped penalty
-R_PHISHING_MISSED = 0.0      # Clamped penalty
-R_FALSE_POSITIVE_EXEC = 0.0  # Clamped penalty
-R_CREDENTIAL_PHISHING_MISSED = 0.0 # Clamped penalty
-R_EPISODE_COMPLETE = 0.10
-R_WRONG_ESCALATION = 0.0     # Clamped penalty
-R_ESCALATION_NO_REASON = 0.0 # Clamped penalty
 
-PRIORITY_ORDER = {"critical": 4, "high": 3, "medium": 2, "low": 1, "spam": 0}
+def compute_reward(
+    action_type: str,
+    email: Optional[EmailWithGroundTruth],
+    action_category: Optional[str],
+    action_priority: Optional[str],
+    action_route: Optional[str],
+    is_done: bool,
+    task_emails: List[EmailWithGroundTruth],
+    triaged_actions: List[Dict[str, Any]],
+    step_count: int,
+    max_steps: int,
+) -> Dict[str, Any]:
+    """
+    Compute the reward for a step.
 
-def _priority_close(predicted: Optional[str], true: Optional[str]) -> float:
-    if predicted == true: return 1.0
-    p, t = PRIORITY_ORDER.get(predicted, -1), PRIORITY_ORDER.get(true, -1)
-    if p < 0 or t < 0: return 0.0
-    return 0.5 if abs(p - t) == 1 else 0.0
+    For non-final steps: immediate partial reward based on action quality.
+    For the final step (done=True): episode-level summary reward.
 
-def calculate_triage_reward(action: TriageAction, email: EmailMessage, step: int, task_id: str) -> Tuple[float, List[str]]:
-    reward = 0.0
-    signals = []
-    true_priority, true_category = getattr(email, '_true_priority', None), getattr(email, '_true_category', None)
-    true_route, is_phishing = getattr(email, '_true_route', None), getattr(email, '_is_phishing', False)
+    Returns:
+        {
+            "reward": float,          # Clamped [0.0, 1.0]
+            "step_reward": float,     # Immediate reward this step
+            "is_final": bool,
+            "episode_summary": dict,  # Only if is_final
+        }
+    """
+    step_reward = compute_step_reward(
+        action_type=action_type,
+        email=email,
+        action_category=action_category,
+        action_priority=action_priority,
+        action_route=action_route,
+    )
 
-    if action.category == true_category:
-        reward += R_CORRECT_CATEGORY
-        signals.append(f"+{R_CORRECT_CATEGORY:.2f} correct category")
-        if action.category == "phishing" and is_phishing:
-            reward += R_PHISHING_DETECTED
-            signals.append(f"+{R_PHISHING_DETECTED:.2f} phishing bonus")
-    
-    if action.priority == true_priority:
-        reward += R_CORRECT_PRIORITY
-        signals.append(f"+{R_CORRECT_PRIORITY:.2f} correct priority")
-    elif _priority_close(action.priority, true_priority) > 0:
-        reward += R_CORRECT_PRIORITY * 0.5
-        signals.append(f"+{R_CORRECT_PRIORITY*0.5:.2f} partial priority")
+    result: Dict[str, Any] = {
+        "reward": round(max(0.0, min(1.0, step_reward)), 4),
+        "step_reward": step_reward,
+        "is_final": is_done,
+        "episode_summary": None,
+    }
 
-    if action.route_to == true_route:
-        reward += R_CORRECT_ROUTE
-        signals.append(f"+{R_CORRECT_ROUTE:.2f} correct route")
+    if is_done:
+        summary = grade_episode(
+            task_emails=task_emails,
+            triaged_actions=triaged_actions,
+        )
+        result["episode_summary"] = summary
+        # Override reward with final episode score when done
+        result["reward"] = summary["episode_score"]
 
-    return max(0.0, min(1.0, reward)), signals
+    return result
 
-def calculate_escalation_reward(action: TriageAction, email: Optional[EmailMessage], task_id: str) -> Tuple[float, List[str]]:
-    reward = 0.0
-    signals = []
-    if email:
-        true_cat = getattr(email, '_true_category', None)
-        if true_cat in ("security_incident", "phishing") and action.escalation_target == "security_team":
-            reward = R_SECURITY_ESCALATED
-            signals.append(f"+{R_SECURITY_ESCALATED:.2f} correct escalation")
-    return max(0.0, min(1.0, reward)), signals
 
-def calculate_tool_reward(tool_name: str, tool_result: Dict[str, Any], task_id: str, count: int, expected: List[str]) -> Tuple[float, List[str]]:
-    reward = R_TOOL_CORRECT if tool_name in expected else 0.0
-    return max(0.0, min(1.0, reward)), [f"+{reward:.2f} tool reward"]
+def compute_completion_bonus(
+    triaged_count: int,
+    total_emails: int,
+    step_count: int,
+    max_steps: int,
+) -> float:
+    """
+    Bonus for completing all emails efficiently.
+    Returns a small bonus (up to 0.05) for triaging all emails within step budget.
+    """
+    if triaged_count < total_emails:
+        return 0.0
+    efficiency = 1.0 - (step_count / max_steps)
+    return round(min(0.05, efficiency * 0.05), 4)
 
-def calculate_episode_completion_reward(step: int, max_steps: int, all_triaged: bool, task_id: str) -> Tuple[float, List[str]]:
-    bonus = R_EPISODE_COMPLETE if all_triaged else 0.0
-    return bonus, [f"+{bonus:.2f} completion"]
 
-class RewardNormaliser:
-    def __init__(self, n_emails: int, task_id: str):
-        self.cumulative = 0.0
-        self.n = max(1, n_emails)
+def explain_reward(reward_info: Dict[str, Any]) -> str:
+    """Return a human-readable explanation of the reward."""
+    lines = []
+    lines.append(f"Step Reward: {reward_info['step_reward']:.4f}")
+    lines.append(f"Final Reward: {reward_info['reward']:.4f}")
 
-    def add(self, raw_reward: float, signals: List[str], step: int) -> None:
-        self.cumulative += raw_reward
+    if reward_info.get("episode_summary"):
+        s = reward_info["episode_summary"]
+        lines.append(f"Episode Score: {s['episode_score']:.4f}")
+        lines.append(f"  Raw Score: {s['raw_score']:.4f}")
+        lines.append(f"  Penalty Total: {s['penalty_total']:.4f}")
+        lines.append(f"  Emails Triaged: {s['num_triaged']}/{s['num_emails']}")
+        lines.append(f"  Coverage: {s['coverage']:.2%}")
 
-    def normalised(self) -> float:
-        # Simple normalization to [0.0, 1.0] based on email count
-        max_possible = self.n * 0.8  # Approx max per email
-        return max(0.0, min(1.0, self.cumulative / max_possible if max_possible > 0 else 0.0))
+        if s["penalties"]:
+            lines.append("  Penalties Applied:")
+            for p in s["penalties"]:
+                lines.append(f"    - {p['reason']} ({p['penalty']:.2f})")
+
+    return "\n".join(lines)
