@@ -94,3 +94,7 @@ docker run -p 7860:7860 -p 8501:8501 email-triage-openenv
 | API_BASE_URL  | LLM API base (e.g., Groq endpoint) |
 | MODEL_NAME    | Model identifier                   |
 | HF_TOKEN      | Hugging Face token (if needed)     |
+
+
+---
+<sub>Submission for Meta PyTorch OpenEnv Hackathon 2026 (Scaler Round 1)</sub>
