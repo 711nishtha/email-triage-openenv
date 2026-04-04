@@ -1,151 +1,150 @@
 """
-server/app.py — FastAPI server for the Advanced Enterprise Email Triage OpenEnv.
+server/app.py — FastAPI application for the Email Triage OpenEnv.
 
-Exposes the standard OpenEnv HTTP interface:
-  POST /reset   → Reset environment, return initial observation
-  POST /step    → Submit action, receive observation + reward
-  GET  /state   → Return full current environment state
-  GET  /health  → Liveness probe
-
-Designed for HF Spaces Docker deployment on port 7860.
-No secrets are logged or stored.
+Endpoints:
+  POST /reset  → Observation
+  POST /step   → StepResponse
+  GET  /state  → EnvironmentState
+  GET  /health → {"status": "ok"}
 """
 
 from __future__ import annotations
-
-import os
 import sys
+import os
 
-# Ensure the project root is on the path (needed for imports when running from server/)
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+# Add parent to path so imports work
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from typing import Any, Dict
-
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+import uvicorn
 
 from models import (
-    EmailObservation,
+    Action,
+    Observation,
+    StepResponse,
     EnvironmentState,
     ResetRequest,
-    StepResponse,
-    TriageAction,
 )
 from environment import EmailTriageEnvironment
 
 
-# ── App setup ────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# App Setup
+# ─────────────────────────────────────────────
 
 app = FastAPI(
-    title="Advanced Enterprise Email Triage — OpenEnv",
-    description=(
-        "A production-grade enterprise email triage environment for AI agents. "
-        "Supports three difficulty levels: easy, medium, hard."
-    ),
+    title="Advanced Enterprise Email Triage OpenEnv",
+    description="OpenEnv-compliant environment for evaluating email triage agents.",
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
 )
 
-# CORS — allow all origins for HF Spaces / public API access
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["GET", "POST"],
+    allow_credentials=True,
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ── Environment instance (single-session for hackathon) ──────────────────────
-# For production multi-session, use a session store keyed by session_id.
+# Global environment instance (single-session server)
 env = EmailTriageEnvironment()
 
 
-# ── Routes ───────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# Endpoints
+# ─────────────────────────────────────────────
 
 @app.get("/health")
-async def health() -> Dict[str, str]:
-    """Liveness probe — always returns 200 OK."""
-    return {"status": "ok", "service": "advanced-enterprise-email-triage-openenv"}
+async def health() -> dict:
+    """Health check endpoint."""
+    return {"status": "ok", "service": "email-triage-openenv", "version": "1.0.0"}
 
 
-@app.post("/reset", response_model=EmailObservation)
-async def reset(request: ResetRequest) -> EmailObservation:
+@app.post("/reset", response_model=Observation)
+async def reset(request: ResetRequest = None) -> Observation:
     """
-    Reset the environment to a fresh episode.
-
-    Body:
-      task_id: "easy" | "medium" | "hard"
-      seed: optional int for reproducible episodes
-
-    Returns the initial observation.
+    Reset the environment for a new episode.
+    
+    Args:
+        task_id: One of "easy", "medium", "hard" (default: "easy")
+    
+    Returns:
+        Initial observation with inbox emails and available tools.
     """
-    try:
-        observation = env.reset(request)
-        return observation
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Reset failed: {exc}") from exc
+    task_id = "easy"
+    if request and request.task_id:
+        task_id = request.task_id
+
+    valid_tasks = ["easy", "medium", "hard"]
+    if task_id not in valid_tasks:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid task_id '{task_id}'. Must be one of: {valid_tasks}"
+        )
+
+    observation = env.reset(task_id=task_id)
+    return observation
 
 
 @app.post("/step", response_model=StepResponse)
-async def step(action: TriageAction) -> StepResponse:
+async def step(action: Action) -> StepResponse:
     """
-    Submit one agent action and receive the next observation.
+    Submit a triage action and receive a reward.
+    
+    Action types:
+      - triage: Classify an email with priority, category, and route
+      - escalate: Escalate an email directly to a team
+      - use_tool: Invoke an investigation tool
+      - done: Signal that triage is complete
+    
+    Returns:
+        observation, reward (0.0–1.0), done flag, and info dict.
+    """
+    if env.task_id == "" or (env.step_count == 0 and not env.emails):
+        raise HTTPException(
+            status_code=400,
+            detail="Environment not initialized. Call /reset first."
+        )
 
-    Returns: observation, reward (float), done (bool), info (dict).
-    """
     try:
-        response = env.step(action)
-        return response
-    except RuntimeError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Step failed: {exc}") from exc
+        observation, reward, done, info = env.step(action)
+    except Exception as e:
+        obs_fallback = env._build_observation(message=f"Internal error: {str(e)[:120]}")
+        return StepResponse(
+            observation=obs_fallback,
+            reward=0.0,
+            done=False,
+            info={"error": str(e)[:200]},
+        )
+    return StepResponse(
+        observation=observation,
+        reward=reward,
+        done=done,
+        info=info,
+    )
 
 
 @app.get("/state", response_model=EnvironmentState)
 async def state() -> EnvironmentState:
     """
-    Return the full current environment state.
-
-    Includes ground-truth labels for post-episode evaluation.
-    Not intended for the agent to call during inference.
+    Get the full current environment state.
+    
+    Returns complete state including inbox, triaged emails,
+    cumulative reward, step count, and tool results.
     """
-    try:
-        return env.state()
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"State retrieval failed: {exc}") from exc
+    return env.state()
 
 
-# ── Error handlers ───────────────────────────────────────────────────────────
-
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    return JSONResponse(
-        status_code=500,
-        content={"detail": f"Internal error: {str(exc)}", "type": type(exc).__name__},
-    )
-
-
-# ── Entry point ──────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# Entry Point
+# ─────────────────────────────────────────────
 
 if __name__ == "__main__":
-    import uvicorn
-
-    # Load optional config from environment (no secrets needed for server itself)
-    host = os.getenv("HOST", "0.0.0.0")
-    port = int(os.getenv("PORT", "7860"))
-    log_level = os.getenv("LOG_LEVEL", "info")
-
     uvicorn.run(
-        "server.app:app",
-        host=host,
-        port=port,
-        log_level=log_level,
+        "app:app",
+        host="0.0.0.0",
+        port=7860,
         reload=False,
+        log_level="info",
     )
