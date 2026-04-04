@@ -1,394 +1,223 @@
 """
-tools.py — Mock safe tools available to the triage agent.
-
-All tools are deterministic, sandboxed, and return realistic synthetic data.
-No external API calls. No secrets required.
-
-Available tools:
-  - calendar_check   : Check room/person availability
-  - kb_search        : Search internal knowledge base
-  - sender_lookup    : Look up sender reputation and history
+tools.py — Agent tools for email investigation and lookup.
+All tools are deterministic and return structured results.
 """
 
 from __future__ import annotations
-
-import random
-from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 
-# ── Tool dispatcher ──────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# Tool Definitions (for observation)
+# ─────────────────────────────────────────────
 
-AVAILABLE_TOOLS: List[str] = ["calendar_check", "kb_search", "sender_lookup"]
+AVAILABLE_TOOLS: List[str] = [
+    "lookup_sender",
+    "analyze_links",
+    "check_sender_domain",
+    "search_email_history",
+    "flag_security_incident",
+]
 
 
-def run_tool(tool_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Dispatch a tool call by name.
+TOOL_DESCRIPTIONS: Dict[str, str] = {
+    "lookup_sender": "Look up information about an email sender in the corporate directory.",
+    "analyze_links": "Analyze URLs in an email for suspicious patterns.",
+    "check_sender_domain": "Verify whether the sender's domain matches known corporate domains.",
+    "search_email_history": "Search historical emails from this sender.",
+    "flag_security_incident": "Flag an email as a security incident and notify the security team.",
+}
 
-    Returns a dict with keys:
-      - success (bool)
-      - result  (tool-specific data)
-      - error   (str if success is False)
-    """
-    dispatch = {
-        "calendar_check": _tool_calendar_check,
-        "kb_search": _tool_kb_search,
-        "sender_lookup": _tool_sender_lookup,
+
+# ─────────────────────────────────────────────
+# Mock Corporate Directory
+# ─────────────────────────────────────────────
+
+CORPORATE_DIRECTORY: Dict[str, Dict[str, Any]] = {
+    "ceo@acmecorp.com": {"name": "James Wilson", "role": "CEO", "department": "Executive", "verified": True},
+    "cfo@acmecorp.com": {"name": "Sarah Chen", "role": "CFO", "department": "Finance", "verified": True},
+    "cto@acmecorp.com": {"name": "Michael Torres", "role": "CTO", "department": "Engineering", "verified": True},
+    "hr@acmecorp.com": {"name": "HR Department", "role": "HR", "department": "Human Resources", "verified": True},
+    "legal@acmecorp.com": {"name": "Legal Department", "role": "Legal", "department": "Legal", "verified": True},
+    "compliance@acmecorp.com": {"name": "Compliance Team", "role": "Compliance", "department": "Legal", "verified": True},
+    "it-security@acmecorp.com": {"name": "IT Security", "role": "Security", "department": "IT", "verified": True},
+    "finance-alerts@acmecorp.com": {"name": "Finance Alerts", "role": "Finance", "department": "Finance", "verified": True},
+    "dev-team@acmecorp.com": {"name": "Dev Team", "role": "Engineering", "department": "Engineering", "verified": True},
+    "support@it-helpdesk.acmecorp.com": {"name": "IT Helpdesk", "role": "IT Support", "department": "IT", "verified": True},
+    "alice.johnson@acmecorp.com": {"name": "Alice Johnson", "role": "Software Engineer", "department": "Engineering", "verified": True},
+    "marketing@acmecorp.com": {"name": "Marketing Team", "role": "Marketing", "department": "Marketing", "verified": True},
+}
+
+KNOWN_CORPORATE_DOMAINS: List[str] = [
+    "acmecorp.com",
+    "it-helpdesk.acmecorp.com",
+]
+
+SUSPICIOUS_DOMAINS: List[str] = [
+    "acme-corp-security.net",
+    "acmecorp-communications.net",
+    "microsoft-security-alert.info",
+    "microsofT-login.info",
+    "suspicious-domain.xyz",
+    "deals4u-promo.biz",
+    "shopnow-weekly.com",
+    "industry-recognition-committee.org",
+]
+
+
+# ─────────────────────────────────────────────
+# Tool Implementations
+# ─────────────────────────────────────────────
+
+def lookup_sender(email_address: str) -> Dict[str, Any]:
+    """Look up sender in corporate directory."""
+    if email_address in CORPORATE_DIRECTORY:
+        info = CORPORATE_DIRECTORY[email_address]
+        return {
+            "found": True,
+            "email": email_address,
+            "name": info["name"],
+            "role": info["role"],
+            "department": info["department"],
+            "verified": info["verified"],
+        }
+    return {
+        "found": False,
+        "email": email_address,
+        "message": "Sender not found in corporate directory.",
+        "verified": False,
     }
 
-    if tool_name not in dispatch:
-        return {
-            "success": False,
-            "result": None,
-            "error": f"Unknown tool '{tool_name}'. Available: {AVAILABLE_TOOLS}",
-        }
+
+def analyze_links(links: List[str]) -> Dict[str, Any]:
+    """Analyze URLs for suspicious patterns."""
+    results = []
+    for link in links:
+        suspicious = False
+        reasons = []
+
+        # Check for suspicious TLDs
+        suspicious_tlds = [".xyz", ".biz", ".info", ".net"]
+        for tld in suspicious_tlds:
+            if tld in link:
+                suspicious = True
+                reasons.append(f"Suspicious TLD ({tld}) detected")
+
+        # Check for homograph attacks (mixed case in domain)
+        domain_part = link.split("/")[2] if "://" in link else link
+        if any(c.isupper() for c in domain_part):
+            suspicious = True
+            reasons.append("Mixed case in domain name (possible homograph attack)")
+
+        # Check for known suspicious domains
+        for bad_domain in SUSPICIOUS_DOMAINS:
+            if bad_domain in link:
+                suspicious = True
+                reasons.append(f"Known suspicious domain: {bad_domain}")
+
+        # Check for IP addresses in URL
+        import re
+        if re.search(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}", link):
+            suspicious = True
+            reasons.append("IP address used instead of domain name")
+
+        results.append({
+            "url": link,
+            "suspicious": suspicious,
+            "reasons": reasons,
+        })
+
+    overall_risk = "high" if any(r["suspicious"] for r in results) else "low"
+    return {
+        "links_analyzed": len(links),
+        "overall_risk": overall_risk,
+        "details": results,
+    }
+
+
+def check_sender_domain(email_address: str) -> Dict[str, Any]:
+    """Verify sender domain against known corporate domains."""
+    try:
+        domain = email_address.split("@")[1]
+    except IndexError:
+        return {"error": "Invalid email address format"}
+
+    is_corporate = domain in KNOWN_CORPORATE_DOMAINS
+    is_suspicious = domain in SUSPICIOUS_DOMAINS
+
+    return {
+        "email": email_address,
+        "domain": domain,
+        "is_corporate_domain": is_corporate,
+        "is_suspicious_domain": is_suspicious,
+        "risk_level": "high" if is_suspicious else ("low" if is_corporate else "medium"),
+        "recommendation": (
+            "Block and report to security" if is_suspicious
+            else ("Trusted internal sender" if is_corporate
+                  else "Verify sender identity before acting")
+        ),
+    }
+
+
+def search_email_history(email_address: str, limit: int = 5) -> Dict[str, Any]:
+    """Search mock email history for communication patterns."""
+    history_db: Dict[str, List[Dict[str, Any]]] = {
+        "ceo@acmecorp.com": [
+            {"subject": "Q3 Results Review", "date": "2024-01-10", "direction": "received"},
+            {"subject": "All Hands Meeting", "date": "2024-01-05", "direction": "received"},
+        ],
+        "cfo@acmecorp.com": [
+            {"subject": "Q3 Budget Review", "date": "2024-01-08", "direction": "received"},
+        ],
+        "securityalert@acme-corp-security.net": [],
+        "noreply@microsoft-security-alert.info": [],
+        "ceo@acmecorp-communications.net": [],
+    }
+
+    history = history_db.get(email_address, [])
+    return {
+        "email": email_address,
+        "history_count": len(history),
+        "previous_communications": history[:limit],
+        "first_contact": len(history) == 0,
+        "note": "No prior communication history — exercise caution" if len(history) == 0 else None,
+    }
+
+
+def flag_security_incident(email_id: str, reason: str) -> Dict[str, Any]:
+    """Flag an email as a security incident."""
+    return {
+        "success": True,
+        "email_id": email_id,
+        "incident_id": f"INC-{hash(email_id) % 100000:05d}",
+        "reason": reason,
+        "status": "Reported to Security Operations Center",
+        "action_taken": "Email quarantined and security team notified",
+    }
+
+
+# ─────────────────────────────────────────────
+# Tool Dispatcher
+# ─────────────────────────────────────────────
+
+def execute_tool(tool_name: str, tool_args: Dict[str, Any]) -> Dict[str, Any]:
+    """Route tool call to the appropriate implementation."""
+    tools_map = {
+        "lookup_sender": lambda args: lookup_sender(args.get("email_address", "")),
+        "analyze_links": lambda args: analyze_links(args.get("links", [])),
+        "check_sender_domain": lambda args: check_sender_domain(args.get("email_address", "")),
+        "search_email_history": lambda args: search_email_history(
+            args.get("email_address", ""), args.get("limit", 5)
+        ),
+        "flag_security_incident": lambda args: flag_security_incident(
+            args.get("email_id", ""), args.get("reason", "Suspicious email")
+        ),
+    }
+
+    if tool_name not in tools_map:
+        return {"error": f"Unknown tool: '{tool_name}'. Available: {list(tools_map.keys())}"}
 
     try:
-        result = dispatch[tool_name](params)
-        return {"success": True, "result": result, "error": None}
-    except Exception as exc:
-        return {"success": False, "result": None, "error": str(exc)}
-
-
-# ── Calendar check ───────────────────────────────────────────────────────────
-
-# Synthetic room availability database
-_ROOM_SCHEDULE: Dict[str, Dict[str, bool]] = {
-    "boardroom_a": {
-        "monday_9am": True, "monday_2pm": False,
-        "tuesday_9am": True, "tuesday_2pm": True,
-        "wednesday_9am": False, "wednesday_2pm": True,
-        "thursday_9am": True, "thursday_2pm": False,   # Boardroom A busy Thursday 2PM
-        "friday_9am": True, "friday_2pm": True,
-    },
-    "executive_suite": {
-        "monday_9am": False, "monday_2pm": True,
-        "tuesday_9am": True, "tuesday_2pm": False,
-        "wednesday_9am": True, "wednesday_2pm": True,
-        "thursday_9am": False, "thursday_2pm": True,   # Executive Suite free Thursday 2PM
-        "friday_9am": True, "friday_2pm": False,
-    },
-    "conference_room_1": {
-        "thursday_2pm": True,
-        "friday_2pm": True,
-    },
-}
-
-# Person availability (for scheduling meetings)
-_PERSON_SCHEDULE: Dict[str, Dict[str, str]] = {
-    f"ceo@acmecorp.com": {
-        "thursday_2pm": "available",
-        "thursday_3pm": "available",
-        "friday_9am": "busy (board call)",
-    },
-    f"cfo@acmecorp.com": {
-        "thursday_2pm": "available",
-        "thursday_3pm": "available",
-        "wednesday_eod": "deadline: Q3 board brief due",
-    },
-    f"cto@acmecorp.com": {
-        "thursday_2pm": "busy (engineering all-hands)",
-        "thursday_3pm": "available",
-    },
-}
-
-
-def _tool_calendar_check(params: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Check room or person availability.
-
-    Params:
-      resource_type: "room" | "person"
-      resource_name: str (room name or email address)
-      day: str (e.g., "thursday")
-      time: str (e.g., "2pm")
-
-    Returns availability info and alternatives if unavailable.
-    """
-    resource_type = params.get("resource_type", "room")
-    resource_name = str(params.get("resource_name", "")).lower().replace(" ", "_")
-    day = str(params.get("day", "")).lower()
-    time = str(params.get("time", "")).lower().replace(":", "").replace(" ", "")
-
-    slot_key = f"{day}_{time}"
-
-    if resource_type == "room":
-        schedule = _ROOM_SCHEDULE.get(resource_name, {})
-        available = schedule.get(slot_key, True)  # Default available if not in our DB
-
-        # Build alternatives
-        alternatives = []
-        if not available:
-            for room, sched in _ROOM_SCHEDULE.items():
-                if room != resource_name and sched.get(slot_key, True):
-                    alternatives.append(room.replace("_", " ").title())
-
-        return {
-            "resource": resource_name.replace("_", " ").title(),
-            "slot": f"{day.title()} {time.upper()}",
-            "available": available,
-            "alternatives": alternatives,
-            "note": (
-                "Room available — calendar invite can be sent."
-                if available
-                else f"Room is booked. Suggested alternatives: {', '.join(alternatives) or 'none found'}"
-            ),
-        }
-
-    elif resource_type == "person":
-        schedule = _PERSON_SCHEDULE.get(params.get("resource_name", ""), {})
-        status = schedule.get(slot_key, "available")
-        return {
-            "person": params.get("resource_name"),
-            "slot": f"{day.title()} {time.upper()}",
-            "status": status,
-        }
-
-    return {"error": "resource_type must be 'room' or 'person'"}
-
-
-# ── KB search ────────────────────────────────────────────────────────────────
-
-_KB_ARTICLES: List[Dict[str, str]] = [
-    {
-        "id": "KB-001",
-        "title": "Data Processing Addendum (DPA) — Standard Template",
-        "category": "legal",
-        "content": (
-            "Acme Corp's standard DPA template covers GDPR Article 28 requirements and includes "
-            "Standard Contractual Clauses (SCCs) for EU data transfers. "
-            "The template is maintained by the Legal team and reviewed quarterly. "
-            "Current version: DPA-v3.2 (updated Jan 2024). "
-            "Contact legal@acmecorp.com to initiate a DPA signing workflow."
-        ),
-        "tags": ["gdpr", "dpa", "legal", "vendor", "contract", "scc"],
-    },
-    {
-        "id": "KB-002",
-        "title": "Approved External Venue Vendors — Executive Meetings",
-        "category": "operations",
-        "content": (
-            "Approved venues for off-site executive meetings (pre-vetted, NDA on file): "
-            "1. The Pinnacle Conference Centre — capacity 20, AV included. "
-            "2. Horizon Business Hub — capacity 30, catering available. "
-            "3. CityView Boardroom — capacity 15, preferred for board meetings. "
-            "Contact operations@acmecorp.com to book. Lead time: 48 hours minimum."
-        ),
-        "tags": ["venue", "executive", "offsite", "boardroom", "meeting"],
-    },
-    {
-        "id": "KB-003",
-        "title": "Security Incident Response Procedure",
-        "category": "security",
-        "content": (
-            "Severity 1 (Critical): Data breach, active intrusion, ransomware. "
-            "Immediate steps: (1) Notify security@acmecorp.com + CISO. "
-            "(2) Isolate affected systems. (3) Preserve logs. "
-            "(4) Notify legal team if PII is involved (breach notification SLA: 72 hours). "
-            "Do NOT discuss publicly until authorised by Communications team."
-        ),
-        "tags": ["security", "incident", "breach", "response", "procedure"],
-    },
-    {
-        "id": "KB-004",
-        "title": "Phishing Reporting Procedure",
-        "category": "security",
-        "content": (
-            "If you receive a suspected phishing email: "
-            "(1) Do NOT click any links or download attachments. "
-            "(2) Forward the email as attachment to phishing@acmecorp.com. "
-            "(3) IT Security will confirm within 2 hours. "
-            "Signs of phishing: urgency, spoofed domains, credential requests, wire transfers."
-        ),
-        "tags": ["phishing", "security", "email", "spoofing"],
-    },
-    {
-        "id": "KB-005",
-        "title": "Wire Transfer Authorisation Policy",
-        "category": "finance",
-        "content": (
-            "All wire transfers over $10,000 require dual authorisation from CFO and CEO. "
-            "New vendors must be verified through the Finance team's vendor onboarding process "
-            "(minimum 3 business days). "
-            "Email-only wire requests are NEVER valid — always confirm via phone with the requestor. "
-            "Report suspicious wire requests to security@acmecorp.com immediately."
-        ),
-        "tags": ["wire", "transfer", "finance", "policy", "fraud", "bec"],
-    },
-    {
-        "id": "KB-006",
-        "title": "Employee Password Reset Procedure",
-        "category": "it",
-        "content": (
-            "Password resets are initiated ONLY through the internal IT portal: "
-            "https://it.acmecorp.com/reset (internal network only). "
-            "IT will NEVER ask for your current password via email. "
-            "If you receive a password reset email from an external domain, report it as phishing."
-        ),
-        "tags": ["password", "reset", "it", "security", "credential"],
-    },
-]
-
-
-def _tool_kb_search(params: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Search the internal knowledge base.
-
-    Params:
-      query: str — search terms
-      category: str (optional) — filter by category (legal, security, finance, it, operations)
-      max_results: int (default 3)
-
-    Returns list of matching KB articles (id, title, content snippet).
-    """
-    query = str(params.get("query", "")).lower()
-    category_filter = str(params.get("category", "")).lower()
-    max_results = int(params.get("max_results", 3))
-
-    if not query:
-        return {"results": [], "message": "No query provided."}
-
-    query_terms = set(query.split())
-    results = []
-
-    for article in _KB_ARTICLES:
-        # Apply category filter if specified
-        if category_filter and article["category"] != category_filter:
-            continue
-
-        # Score relevance: keyword overlap with tags + title + content
-        score = 0
-        searchable = (
-            " ".join(article["tags"])
-            + " " + article["title"].lower()
-            + " " + article["content"].lower()
-        )
-        for term in query_terms:
-            if term in searchable:
-                score += 1
-
-        if score > 0:
-            results.append({
-                "id": article["id"],
-                "title": article["title"],
-                "category": article["category"],
-                "snippet": article["content"][:250] + "...",
-                "relevance_score": score,
-            })
-
-    # Sort by relevance
-    results.sort(key=lambda x: x["relevance_score"], reverse=True)
-    results = results[:max_results]
-
-    return {
-        "query": query,
-        "results": results,
-        "total_found": len(results),
-        "message": f"Found {len(results)} matching article(s).",
-    }
-
-
-# ── Sender lookup ────────────────────────────────────────────────────────────
-
-# Suspicious domain patterns (deterministic heuristics)
-_SUSPICIOUS_PATTERNS: List[str] = [
-    "acme-corp",        # typosquatting
-    "acmecorp-",        # subdomain spoofing
-    "acmec0rp",         # character substitution
-    "acme_corp",        # underscore domain (illegal but some mail systems accept)
-]
-
-_KNOWN_TRUSTED_DOMAINS: List[str] = [
-    "acmecorp.com",
-    "boardmembers.acmecorp.com",
-    "cloudprovider.com",
-    "legit-saas.io",
-]
-
-
-def _tool_sender_lookup(params: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Look up sender reputation and flag suspicious domains.
-
-    Params:
-      email: str — sender email address
-
-    Returns reputation data, domain analysis, and threat signals.
-    """
-    from models import SENDER_REGISTRY  # lazy import to avoid circular
-
-    email = str(params.get("email", "")).lower().strip()
-    if not email or "@" not in email:
-        return {"error": "Valid email address required."}
-
-    domain = email.split("@")[-1]
-
-    # Check registry
-    if email in SENDER_REGISTRY:
-        profile = SENDER_REGISTRY[email]
-        return {
-            "email": email,
-            "domain": domain,
-            "known_sender": True,
-            "display_name": profile.display_name,
-            "is_internal": profile.is_internal,
-            "is_vip": profile.is_vip,
-            "reputation_score": profile.reputation_score,
-            "previous_interactions": profile.previous_interactions,
-            "job_title": profile.job_title,
-            "department": profile.department,
-            "is_flagged_suspicious": profile.is_flagged_suspicious,
-            "threat_signals": (
-                ["Domain pre-flagged as suspicious by security tooling"]
-                if profile.is_flagged_suspicious else []
-            ),
-            "recommendation": (
-                "DO NOT ENGAGE — report to security team"
-                if profile.is_flagged_suspicious
-                else "Trusted sender"
-            ),
-        }
-
-    # Unknown sender — run heuristic analysis
-    threat_signals = []
-
-    # Check for typosquatting patterns
-    for pattern in _SUSPICIOUS_PATTERNS:
-        if pattern in domain:
-            threat_signals.append(f"Domain contains suspicious pattern: '{pattern}'")
-
-    # Check if domain spoofs a trusted domain name
-    for trusted in _KNOWN_TRUSTED_DOMAINS:
-        trusted_base = trusted.split(".")[0]
-        if trusted_base in domain and domain != trusted:
-            threat_signals.append(
-                f"Domain '{domain}' may be spoofing trusted domain '{trusted}'"
-            )
-
-    # Heuristic reputation (unknown domains default to moderate suspicion)
-    rep_score = 0.3 if threat_signals else 0.5
-
-    return {
-        "email": email,
-        "domain": domain,
-        "known_sender": False,
-        "display_name": None,
-        "is_internal": domain == "acmecorp.com",
-        "is_vip": False,
-        "reputation_score": rep_score,
-        "previous_interactions": 0,
-        "threat_signals": threat_signals,
-        "recommendation": (
-            "HIGH RISK — likely phishing or spoofed domain. Report to security."
-            if threat_signals
-            else "Unknown sender — proceed with caution."
-        ),
-    }
-
-
-# Expose the registry reference for sender_lookup
-try:
-    from data import SENDER_REGISTRY
-except ImportError:
-    SENDER_REGISTRY = {}  # type: ignore
+        return tools_map[tool_name](tool_args)
+    except Exception as e:
+        return {"error": f"Tool execution failed: {str(e)}"}
