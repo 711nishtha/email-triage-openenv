@@ -1,0 +1,11 @@
+[project]
+name = "email-triage-openenv"
+version = "0.1.0"
+description = "Advanced Enterprise Email Triage OpenEnv environment"
+authors = [
+    { name = "Nishtha" }
+]
+dependencies = []
+
+[tool.setuptools]
+packages = ["."]
