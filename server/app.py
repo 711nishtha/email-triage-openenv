@@ -140,11 +140,16 @@ async def state() -> EnvironmentState:
 # Entry Point
 # ─────────────────────────────────────────────
 
-if __name__ == "__main__":
+def main():
+    import uvicorn
     uvicorn.run(
-        "app:app",
+        "server.app:app",
         host="0.0.0.0",
         port=7860,
         reload=False,
         log_level="info",
     )
+
+
+if __name__ == "__main__":
+    main()
