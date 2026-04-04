@@ -5,7 +5,12 @@ description = "Advanced Enterprise Email Triage OpenEnv environment"
 authors = [
     { name = "Nishtha" }
 ]
-dependencies = []
+dependencies = [
+    "openenv-core>=0.2.0"
+]
+
+[project.scripts]
+server = "server.app:main"
 
 [tool.setuptools]
 packages = ["."]
