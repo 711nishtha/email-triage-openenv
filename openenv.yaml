@@ -1,54 +1,136 @@
-# openenv.yaml
-# OpenEnv environment specification
-# Compatible with: openenv validate
-
-name: Advanced-Enterprise-Email-Triage-OpenEnv
+name: advanced-enterprise-email-triage
 version: "1.0.0"
 description: >
-  A production-grade enterprise email triage environment for AI agents.
-  Tasks span single-email classification to complex mixed inboxes.
+  Enterprise email triage environment where an agent must classify, prioritize,
+  and route emails. Includes phishing traps, urgent business emails, and ambiguous cases.
 
-author: "OpenEnv Hackathon 2026 Submission"
-license: MIT
-
-# ── Environment endpoints ────────────────────────────────────────────────────
 server:
-  framework: fastapi
   host: "0.0.0.0"
   port: 7860
   endpoints:
-    reset: { method: POST, path: /reset }
-    step: { method: POST, path: /step }
-    state: { method: GET, path: /state }
-    health: { method: GET, path: /health }
+    reset:
+      method: POST
+      path: /reset
+      description: Reset environment and return initial observation
+    step:
+      method: POST
+      path: /step
+      description: Submit triage action and receive reward
+    state:
+      method: GET
+      path: /state
+      description: Get full environment state
+    health:
+      method: GET
+      path: /health
+      description: Health check
 
-# ── Action space ─────────────────────────────────────────────────────────────
-action_space:
-  type: structured
-  schema: TriageAction
-
-# ── Tasks ────────────────────────────────────────────────────────────────────
-tasks:
-  - id: easy
-    name: "Morning Inbox Clear"
-    max_steps: 5
-  - id: medium
-    name: "Batch Triage"
-    max_steps: 15
-  - id: hard
-    name: "Threat Inbox"
-    max_steps: 25
-
-# ── Reward bounds ────────────────────────────────────────────────────────────
 reward:
   min: 0.0
   max: 1.0
-  normalised: true
-  description: Dense per-action rewards clamped to [0.0, 1.0].
+  type: dense
+  description: >
+    Partial credit reward. Category correct +0.4, priority correct +0.3,
+    routing correct +0.3. Penalties for missed urgent emails and phishing misclassification.
 
-# ── Runtime constraints ──────────────────────────────────────────────────────
-runtime:
-  max_episode_minutes: 20
-  cpu_cores: 2
-  memory_gb: 8
-  python_version: "3.11"
+action_space:
+  type: object
+  required:
+    - action_type
+  properties:
+    action_type:
+      type: string
+      enum: [triage, escalate, use_tool, done]
+      description: Type of action to perform
+    email_id:
+      type: string
+      description: ID of the email to act on
+    priority:
+      type: string
+      enum: [urgent, high, medium, low]
+      description: Assigned priority level
+    category:
+      type: string
+      enum:
+        - phishing
+        - urgent_business
+        - internal_task
+        - marketing
+        - hr
+        - legal
+        - it_support
+        - finance
+        - spam
+      description: Email classification category
+    route_to:
+      type: string
+      enum: [security, executive, manager, it, hr, finance, archive, trash]
+      description: Department or destination to route the email
+    tool_name:
+      type: string
+      description: Name of tool to invoke (when action_type=use_tool)
+    tool_args:
+      type: object
+      description: Arguments for the tool
+
+observation_space:
+  type: object
+  properties:
+    inbox:
+      type: array
+      description: List of emails in the current inbox
+      items:
+        type: object
+        properties:
+          id:
+            type: string
+          sender:
+            type: string
+          subject:
+            type: string
+          body:
+            type: string
+          timestamp:
+            type: string
+    triaged:
+      type: array
+      description: Emails already processed by the agent
+    step_count:
+      type: integer
+    task_id:
+      type: string
+    available_tools:
+      type: array
+      items:
+        type: string
+
+tasks:
+  - id: easy
+    name: Basic Email Triage
+    description: >
+      Triage 2 emails with clear signals. One is an urgent CEO request,
+      one is obvious marketing spam.
+    difficulty: easy
+    max_steps: 10
+    email_count: 2
+    reward_threshold: 0.7
+
+  - id: medium
+    name: Mixed Priority Inbox
+    description: >
+      Triage 6 emails with mixed priorities. Includes internal tasks, HR notices,
+      a suspicious email, and a high-priority finance request.
+    difficulty: medium
+    max_steps: 20
+    email_count: 6
+    reward_threshold: 0.6
+
+  - id: hard
+    name: Enterprise Inbox Under Attack
+    description: >
+      Triage 12 emails including sophisticated phishing attempts, urgent executive
+      escalations, ambiguous internal requests, and noise. Requires careful analysis.
+    difficulty: hard
+    max_steps: 40
+    email_count: 12
+    reward_threshold: 0.5
