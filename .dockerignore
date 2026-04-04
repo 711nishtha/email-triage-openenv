@@ -1,9 +1,6 @@
 # ============================================================
 # .dockerignore — Exclude secrets, caches, and dev artifacts
 # from the Docker build context.
-#
-# SECURITY: Ensures no credentials, keys, or local config
-# files are ever baked into the Docker image.
 # ============================================================
 
 # ── Secrets and credentials (NEVER include in image) ─────────
@@ -18,7 +15,7 @@ credentials/
 .aws/
 .ssh/
 
-# ── Python caches ─────────────────────────────────────────────
+# ── Python caches ────────────────────────────────────────────
 __pycache__/
 *.pyc
 *.pyo
@@ -29,13 +26,13 @@ dist/
 build/
 .eggs/
 
-# ── Virtual environments ───────────────────────────────────────
+# ── Virtual environments ─────────────────────────────────────
 venv/
 .venv/
 env/
 .env_backup/
 
-# ── Development and test files ────────────────────────────────
+# ── Development and test files ───────────────────────────────
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -45,7 +42,7 @@ htmlcov/
 tests/
 test_*.py
 
-# ── Editor and OS files ───────────────────────────────────────
+# ── Editor and OS files ──────────────────────────────────────
 .idea/
 .vscode/
 *.swp
@@ -53,20 +50,19 @@ test_*.py
 .DS_Store
 Thumbs.db
 
-# ── Git ───────────────────────────────────────────────────────
+# ── Git ──────────────────────────────────────────────────────
 .git/
 .gitignore
 .gitattributes
 
-# ── Documentation (not needed at runtime) ─────────────────────
-README.md
+# ── Documentation (keep README, exclude others) ──────────────
 docs/
 *.md
 
-# ── Notebooks ─────────────────────────────────────────────────
+# ── Notebooks ────────────────────────────────────────────────
 *.ipynb
 .ipynb_checkpoints/
 
-# ── Logs ──────────────────────────────────────────────────────
+# ── Logs ─────────────────────────────────────────────────────
 *.log
 logs/
