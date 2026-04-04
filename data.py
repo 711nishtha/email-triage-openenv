@@ -1,673 +1,353 @@
 """
-data.py — Synthetic realistic email generator for the Enterprise Email Triage OpenEnv.
-
-Generates diverse, realistic email scenarios across three difficulty tiers.
-All data is entirely fictional. No real PII is used.
+data.py — Synthetic email generation with ground truth labels.
+All data is deterministic (no randomness at grading time).
 """
 
 from __future__ import annotations
-
-import random
-import uuid
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
-
-from models import EmailMessage, SenderProfile
+from typing import Dict, List
+from models import EmailWithGroundTruth
 
 
-# ── Synthetic sender registry ────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# EASY TASK — 2 emails, clear signals
+# ─────────────────────────────────────────────
 
-INTERNAL_DOMAIN = "acmecorp.com"
+EASY_EMAILS: List[EmailWithGroundTruth] = [
+    EmailWithGroundTruth(
+        id="easy_001",
+        sender="ceo@acmecorp.com",
+        subject="URGENT: Board presentation needed by 3PM TODAY",
+        body=(
+            "I need the Q3 financial summary slides prepared and sent to the board "
+            "immediately. The meeting has been moved up to 3PM today. Please escalate "
+            "to the finance team and confirm receipt. This is time-critical."
+        ),
+        timestamp="2024-01-15T09:00:00Z",
+        expected_priority="urgent",
+        expected_category="urgent_business",
+        expected_route="executive",
+    ),
+    EmailWithGroundTruth(
+        id="easy_002",
+        sender="newsletter@deals4u-promo.biz",
+        subject="🔥 50% OFF Everything — Limited Time Offer!",
+        body=(
+            "Don't miss out! Huge savings on all products this week only. "
+            "Click here to claim your discount before it expires. "
+            "Unsubscribe at the bottom of this email."
+        ),
+        timestamp="2024-01-15T08:45:00Z",
+        expected_priority="low",
+        expected_category="marketing",
+        expected_route="trash",
+    ),
+]
 
-SENDER_REGISTRY: Dict[str, SenderProfile] = {
-    # C-Suite
-    f"ceo@{INTERNAL_DOMAIN}": SenderProfile(
-        email=f"ceo@{INTERNAL_DOMAIN}", display_name="Sarah Chen",
-        domain=INTERNAL_DOMAIN, is_internal=True, is_vip=True,
-        reputation_score=0.99, previous_interactions=120,
-        department="Executive", job_title="CEO",
+
+# ─────────────────────────────────────────────
+# MEDIUM TASK — 6 emails, mixed signals
+# ─────────────────────────────────────────────
+
+MEDIUM_EMAILS: List[EmailWithGroundTruth] = [
+    EmailWithGroundTruth(
+        id="med_001",
+        sender="cfo@acmecorp.com",
+        subject="Q4 Budget Approval Required — Deadline Friday",
+        body=(
+            "Hi team, I need final sign-off on the Q4 department budgets by end of day Friday. "
+            "Please review the attached spreadsheet and confirm your department's allocation. "
+            "Delays will impact procurement timelines."
+        ),
+        timestamp="2024-01-15T07:30:00Z",
+        expected_priority="high",
+        expected_category="finance",
+        expected_route="finance",
     ),
-    f"cfo@{INTERNAL_DOMAIN}": SenderProfile(
-        email=f"cfo@{INTERNAL_DOMAIN}", display_name="Marcus Webb",
-        domain=INTERNAL_DOMAIN, is_internal=True, is_vip=True,
-        reputation_score=0.99, previous_interactions=85,
-        department="Finance", job_title="CFO",
+    EmailWithGroundTruth(
+        id="med_002",
+        sender="hr@acmecorp.com",
+        subject="Annual Performance Review — Schedule Your Session",
+        body=(
+            "Dear team member, it's time for annual performance reviews. "
+            "Please use the calendar link to book a 30-minute session with your manager. "
+            "All sessions must be completed by January 31st."
+        ),
+        timestamp="2024-01-15T08:00:00Z",
+        expected_priority="medium",
+        expected_category="hr",
+        expected_route="hr",
     ),
-    f"cto@{INTERNAL_DOMAIN}": SenderProfile(
-        email=f"cto@{INTERNAL_DOMAIN}", display_name="Priya Nair",
-        domain=INTERNAL_DOMAIN, is_internal=True, is_vip=True,
-        reputation_score=0.99, previous_interactions=95,
-        department="Technology", job_title="CTO",
+    EmailWithGroundTruth(
+        id="med_003",
+        sender="support@it-helpdesk.acmecorp.com",
+        subject="Your password expires in 3 days",
+        body=(
+            "This is a reminder that your corporate password will expire in 3 days. "
+            "Please log in to the IT portal to reset your password before it expires "
+            "to avoid account lockout."
+        ),
+        timestamp="2024-01-15T08:15:00Z",
+        expected_priority="medium",
+        expected_category="it_support",
+        expected_route="it",
     ),
-    # HR
-    f"hr-director@{INTERNAL_DOMAIN}": SenderProfile(
-        email=f"hr-director@{INTERNAL_DOMAIN}", display_name="Linda Kowalski",
-        domain=INTERNAL_DOMAIN, is_internal=True,
-        reputation_score=0.97, previous_interactions=40,
-        department="HR", job_title="HR Director",
+    EmailWithGroundTruth(
+        id="med_004",
+        sender="securityalert@acme-corp-security.net",
+        subject="⚠️ Suspicious Login Detected — Verify Your Account NOW",
+        body=(
+            "We detected a login attempt from an unknown device. "
+            "Click here IMMEDIATELY to verify your identity and protect your account: "
+            "http://acme-corp-verify.suspicious-domain.xyz/login "
+            "Failure to verify within 1 hour will result in account suspension."
+        ),
+        timestamp="2024-01-15T08:30:00Z",
+        expected_priority="urgent",
+        expected_category="phishing",
+        expected_route="security",
     ),
-    # Engineering
-    f"eng-lead@{INTERNAL_DOMAIN}": SenderProfile(
-        email=f"eng-lead@{INTERNAL_DOMAIN}", display_name="James Osei",
-        domain=INTERNAL_DOMAIN, is_internal=True,
-        reputation_score=0.96, previous_interactions=200,
-        department="Engineering", job_title="Engineering Lead",
+    EmailWithGroundTruth(
+        id="med_005",
+        sender="dev-team@acmecorp.com",
+        subject="Sprint 42 Retrospective Notes",
+        body=(
+            "Hi all, here are the action items from Sprint 42 retro: "
+            "1) Fix CI/CD pipeline flakiness (owner: Alex). "
+            "2) Add integration tests for payment module (owner: Maria). "
+            "3) Schedule architecture review for Q1 (owner: TBD). "
+            "Please update JIRA tickets by EOD."
+        ),
+        timestamp="2024-01-15T09:00:00Z",
+        expected_priority="medium",
+        expected_category="internal_task",
+        expected_route="manager",
     ),
-    # IT
-    f"it-support@{INTERNAL_DOMAIN}": SenderProfile(
-        email=f"it-support@{INTERNAL_DOMAIN}", display_name="IT Support Team",
-        domain=INTERNAL_DOMAIN, is_internal=True,
-        reputation_score=0.98, previous_interactions=300,
-        department="IT", job_title="IT Support",
+    EmailWithGroundTruth(
+        id="med_006",
+        sender="promo@shopnow-weekly.com",
+        subject="Your Weekly Deals Inside!",
+        body=(
+            "Check out this week's top deals hand-picked for you! "
+            "Electronics, home goods, fashion and more — all on sale. "
+            "Shop now and save big!"
+        ),
+        timestamp="2024-01-15T09:15:00Z",
+        expected_priority="low",
+        expected_category="spam",
+        expected_route="trash",
     ),
-    # Known vendors
-    "contracts@cloudprovider.com": SenderProfile(
-        email="contracts@cloudprovider.com", display_name="CloudProvider Contracts",
-        domain="cloudprovider.com", is_internal=False, is_known_vendor=True,
-        reputation_score=0.92, previous_interactions=15,
-        department="Vendor", job_title="Account Manager",
+]
+
+
+# ─────────────────────────────────────────────
+# HARD TASK — 12 emails, phishing, ambiguous, urgent
+# ─────────────────────────────────────────────
+
+HARD_EMAILS: List[EmailWithGroundTruth] = [
+    EmailWithGroundTruth(
+        id="hard_001",
+        sender="ceo@acmecorp.com",
+        subject="CRITICAL: Wire Transfer Required — Acquisition Closing Today",
+        body=(
+            "I'm in a board meeting and cannot take calls. We are closing the TechVentures "
+            "acquisition TODAY. You must initiate a wire transfer of $2.4M to the escrow "
+            "account immediately. Details: Account 847291047, Routing 021000021. "
+            "Do NOT discuss this with anyone else. Reply confirmation only."
+        ),
+        timestamp="2024-01-15T06:00:00Z",
+        expected_priority="urgent",
+        expected_category="phishing",
+        expected_route="security",
     ),
-    "support@legit-saas.io": SenderProfile(
-        email="support@legit-saas.io", display_name="LegitSaaS Support",
-        domain="legit-saas.io", is_internal=False, is_known_vendor=True,
-        reputation_score=0.88, previous_interactions=8,
+    EmailWithGroundTruth(
+        id="hard_002",
+        sender="legal@acmecorp.com",
+        subject="NDA Signature Required — Partner Agreement Expires Tomorrow",
+        body=(
+            "Please review and sign the attached NDA for the DataStream partnership. "
+            "The agreement expires tomorrow at midnight. Legal has reviewed and approved. "
+            "Use DocuSign link: https://docusign.acmecorp.com/nda-datastream-2024"
+        ),
+        timestamp="2024-01-15T07:00:00Z",
+        expected_priority="high",
+        expected_category="legal",
+        expected_route="executive",
     ),
-    # Board member
-    "r.patel@boardmembers.acmecorp.com": SenderProfile(
-        email="r.patel@boardmembers.acmecorp.com", display_name="Raj Patel",
-        domain="boardmembers.acmecorp.com", is_internal=False, is_vip=True,
-        reputation_score=0.95, previous_interactions=20,
-        job_title="Board Member",
+    EmailWithGroundTruth(
+        id="hard_003",
+        sender="noreply@microsoft-security-alert.info",
+        subject="Microsoft Account: Unusual Activity Detected",
+        body=(
+            "Dear Microsoft user, we detected unusual sign-in activity on your account. "
+            "To secure your account, please verify your credentials immediately: "
+            "https://microsofT-login.info/verify?token=abc123 "
+            "This link expires in 30 minutes."
+        ),
+        timestamp="2024-01-15T07:15:00Z",
+        expected_priority="urgent",
+        expected_category="phishing",
+        expected_route="security",
     ),
-    # Suspicious / phishing domains
-    f"ceo@acmecorp-security.com": SenderProfile(
-        email=f"ceo@acmecorp-security.com", display_name="Sarah Chen",  # display name spoofed
-        domain="acmecorp-security.com", is_internal=False,
-        reputation_score=0.05, previous_interactions=0,
-        is_flagged_suspicious=True,
+    EmailWithGroundTruth(
+        id="hard_004",
+        sender="cto@acmecorp.com",
+        subject="Production Outage — All Hands Required",
+        body=(
+            "We have a P0 production outage affecting 40% of customers. Payment processing "
+            "is down. Engineering, DevOps, and SRE leads: join the war room immediately. "
+            "Bridge: https://meet.acmecorp.com/warroom-p0. This is our highest priority."
+        ),
+        timestamp="2024-01-15T07:30:00Z",
+        expected_priority="urgent",
+        expected_category="urgent_business",
+        expected_route="executive",
     ),
-    "it-helpdesk@acme-corp.net": SenderProfile(
-        email="it-helpdesk@acme-corp.net", display_name="IT Helpdesk",
-        domain="acme-corp.net", is_internal=False,
-        reputation_score=0.04, previous_interactions=0,
-        is_flagged_suspicious=True,
+    EmailWithGroundTruth(
+        id="hard_005",
+        sender="hr@acmecorp.com",
+        subject="Benefits Open Enrollment Closes This Week",
+        body=(
+            "Reminder: Open enrollment for health, dental, and vision benefits closes "
+            "this Friday. Log in to the HR portal to make your selections. "
+            "Employees who do not enroll will remain on their current plan."
+        ),
+        timestamp="2024-01-15T08:00:00Z",
+        expected_priority="medium",
+        expected_category="hr",
+        expected_route="hr",
     ),
-    "noreply@newsletter-blast.com": SenderProfile(
-        email="noreply@newsletter-blast.com", display_name="TechWeekly",
-        domain="newsletter-blast.com", is_internal=False,
-        reputation_score=0.70, previous_interactions=52,
+    EmailWithGroundTruth(
+        id="hard_006",
+        sender="finance-alerts@acmecorp.com",
+        subject="Invoice #INV-2024-0892 Overdue — Vendor Escalation",
+        body=(
+            "Vendor InfraCloud Solutions has escalated invoice #INV-2024-0892 ($47,500) "
+            "which is now 45 days overdue. They have indicated they will suspend service "
+            "within 48 hours if payment is not received. Requires immediate AP review."
+        ),
+        timestamp="2024-01-15T08:30:00Z",
+        expected_priority="high",
+        expected_category="finance",
+        expected_route="finance",
     ),
+    EmailWithGroundTruth(
+        id="hard_007",
+        sender="alice.johnson@acmecorp.com",
+        subject="Can you help review my PR?",
+        body=(
+            "Hey, I've got a PR up for the new authentication module. "
+            "It's been sitting for 3 days and I need at least one more approval to merge. "
+            "Link: https://github.com/acme/repo/pull/1847. No rush, but would appreciate "
+            "a look when you get a chance."
+        ),
+        timestamp="2024-01-15T09:00:00Z",
+        expected_priority="low",
+        expected_category="internal_task",
+        expected_route="manager",
+    ),
+    EmailWithGroundTruth(
+        id="hard_008",
+        sender="awards@industry-recognition-committee.org",
+        subject="Congratulations! Your Company Has Been Selected for an Award",
+        body=(
+            "Dear Business Leader, your company has been selected for the 2024 Industry "
+            "Excellence Award! To claim your award and featured listing, please complete "
+            "the registration form and pay the $299 listing fee at the link below."
+        ),
+        timestamp="2024-01-15T09:15:00Z",
+        expected_priority="low",
+        expected_category="spam",
+        expected_route="trash",
+    ),
+    EmailWithGroundTruth(
+        id="hard_009",
+        sender="compliance@acmecorp.com",
+        subject="SOC 2 Audit Evidence Collection — Response Required by Jan 20",
+        body=(
+            "As part of our SOC 2 Type II audit, we need evidence from your team by "
+            "January 20th. Required: access logs for the past 90 days, change management "
+            "records, and incident response documentation. Please coordinate with your "
+            "team leads and submit via the compliance portal."
+        ),
+        timestamp="2024-01-15T09:30:00Z",
+        expected_priority="high",
+        expected_category="legal",
+        expected_route="manager",
+    ),
+    EmailWithGroundTruth(
+        id="hard_010",
+        sender="ceo@acmecorp-communications.net",
+        subject="Confidential: Restructuring Plans — Do Not Forward",
+        body=(
+            "As we prepare for Q1 restructuring, I need you to pull together a list of "
+            "employees by department with their current compensation. Please send this "
+            "to me at this email address only — not my corporate email. Keep this strictly "
+            "confidential. The board has approved this request."
+        ),
+        timestamp="2024-01-15T10:00:00Z",
+        expected_priority="urgent",
+        expected_category="phishing",
+        expected_route="security",
+    ),
+    EmailWithGroundTruth(
+        id="hard_011",
+        sender="it-security@acmecorp.com",
+        subject="Mandatory Security Training — Complete by January 31",
+        body=(
+            "All employees must complete the annual security awareness training by "
+            "January 31. Training takes approximately 45 minutes. Log in to the "
+            "Learning Management System to begin: https://lms.acmecorp.com/security-2024"
+        ),
+        timestamp="2024-01-15T10:30:00Z",
+        expected_priority="medium",
+        expected_category="it_support",
+        expected_route="it",
+    ),
+    EmailWithGroundTruth(
+        id="hard_012",
+        sender="marketing@acmecorp.com",
+        subject="Q1 Campaign Launch — Feedback Needed",
+        body=(
+            "Hi team, the Q1 marketing campaign is ready for internal review before launch. "
+            "Please review the campaign brief and creative assets in the shared drive and "
+            "provide feedback by Thursday. Your input helps us ensure brand consistency."
+        ),
+        timestamp="2024-01-15T11:00:00Z",
+        expected_priority="medium",
+        expected_category="internal_task",
+        expected_route="manager",
+    ),
+]
+
+
+# ─────────────────────────────────────────────
+# Task Registry
+# ─────────────────────────────────────────────
+
+TASK_EMAIL_MAP: Dict[str, List[EmailWithGroundTruth]] = {
+    "easy": EASY_EMAILS,
+    "medium": MEDIUM_EMAILS,
+    "hard": HARD_EMAILS,
+}
+
+TASK_MAX_STEPS: Dict[str, int] = {
+    "easy": 10,
+    "medium": 20,
+    "hard": 40,
 }
 
 
-def _make_id() -> str:
-    return str(uuid.uuid4())[:8]
+def get_emails_for_task(task_id: str) -> List[EmailWithGroundTruth]:
+    """Return the email list for a given task ID."""
+    if task_id not in TASK_EMAIL_MAP:
+        raise ValueError(f"Unknown task_id: {task_id}. Must be one of {list(TASK_EMAIL_MAP.keys())}")
+    return TASK_EMAIL_MAP[task_id]
 
 
-def _ts(days_ago: float = 0, hours_ago: float = 0, minutes_ago: float = 0) -> datetime:
-    return datetime.utcnow() - timedelta(days=days_ago, hours=hours_ago, minutes=minutes_ago)
-
-
-# ── Easy task emails ─────────────────────────────────────────────────────────
-
-def make_easy_inbox(seed: Optional[int] = None) -> Tuple[List[EmailMessage], Dict[str, SenderProfile]]:
-    """Single clear email — basic categorise + priority."""
-    rng = random.Random(seed)
-    choices = [_easy_it_request, _easy_team_update, _easy_vendor_followup]
-    fn = rng.choice(choices)
-    email = fn()
-    senders = {email.sender: SENDER_REGISTRY.get(email.sender, _unknown_profile(email.sender))}
-    return [email], senders
-
-
-def _easy_it_request() -> EmailMessage:
-    eid = _make_id()
-    email = EmailMessage(
-        email_id=eid,
-        subject="Laptop replacement request — display flickering",
-        sender=f"eng-lead@{INTERNAL_DOMAIN}",
-        sender_display_name="James Osei",
-        recipients=[f"it-support@{INTERNAL_DOMAIN}"],
-        timestamp=_ts(hours_ago=2),
-        body=(
-            "Hi IT team,\n\n"
-            "My laptop display has been flickering for the past three days. "
-            "I've tried the usual fixes (reconnecting the display cable, updating drivers) "
-            "but the issue persists. Could someone arrange a replacement or schedule a repair? "
-            "I'm blocked on a few tasks that require an external monitor.\n\n"
-            "Happy to drop it off at the IT desk whenever is convenient.\n\n"
-            "Thanks,\nJames"
-        ),
-        has_attachments=False,
-    )
-    # Attach hidden ground-truth
-    object.__setattr__(email, '_true_priority', 'medium')
-    object.__setattr__(email, '_true_category', 'it_support')
-    object.__setattr__(email, '_true_route', 'it_helpdesk')
-    object.__setattr__(email, '_is_phishing', False)
-    return email
-
-
-def _easy_team_update() -> EmailMessage:
-    eid = _make_id()
-    email = EmailMessage(
-        email_id=eid,
-        subject="Sprint 47 retrospective notes — action items inside",
-        sender=f"eng-lead@{INTERNAL_DOMAIN}",
-        sender_display_name="James Osei",
-        recipients=[f"engineering@{INTERNAL_DOMAIN}"],
-        timestamp=_ts(hours_ago=1),
-        body=(
-            "Team,\n\n"
-            "Please find below the action items from our Sprint 47 retro:\n"
-            "1. Fix flaky integration tests in the payments module by EOW (owner: Dev).\n"
-            "2. Update runbooks for the new auth service deployment (owner: Ops).\n"
-            "3. Schedule a knowledge-transfer session on the new caching layer (owner: James).\n\n"
-            "Full notes in Confluence: https://wiki.acmecorp.com/sprint47-retro\n\n"
-            "Best,\nJames"
-        ),
-        links=["https://wiki.acmecorp.com/sprint47-retro"],
-    )
-    object.__setattr__(email, '_true_priority', 'low')
-    object.__setattr__(email, '_true_category', 'team_update')
-    object.__setattr__(email, '_true_route', 'engineering_team')
-    object.__setattr__(email, '_is_phishing', False)
-    return email
-
-
-def _easy_vendor_followup() -> EmailMessage:
-    eid = _make_id()
-    email = EmailMessage(
-        email_id=eid,
-        subject="Re: Cloud infrastructure contract renewal — Q1 pricing",
-        sender="contracts@cloudprovider.com",
-        sender_display_name="CloudProvider Contracts",
-        recipients=[f"cfo@{INTERNAL_DOMAIN}"],
-        timestamp=_ts(hours_ago=4),
-        body=(
-            "Dear Marcus,\n\n"
-            "Following up on our conversation from last week. "
-            "I've attached the updated Q1 pricing sheet for the infrastructure contract renewal. "
-            "The revised committed-use discount brings the annual total to $420,000, "
-            "down from the current $480,000.\n\n"
-            "Could your team review by end of month so we can lock in the rate before "
-            "our pricing model refreshes on the 1st?\n\n"
-            "Best regards,\nAlex Turner\nAccount Manager, CloudProvider"
-        ),
-        has_attachments=True,
-        attachment_names=["Q1_pricing_sheet_v2.pdf"],
-    )
-    object.__setattr__(email, '_true_priority', 'high')
-    object.__setattr__(email, '_true_category', 'vendor_contract')
-    object.__setattr__(email, '_true_route', 'finance_team')
-    object.__setattr__(email, '_is_phishing', False)
-    return email
-
-
-# ── Medium task emails ───────────────────────────────────────────────────────
-
-def make_medium_inbox(seed: Optional[int] = None) -> Tuple[
-    List[EmailMessage],
-    Dict[str, List[EmailMessage]],
-    Dict[str, SenderProfile],
-]:
-    """Five emails with thread context, calendar check, KB lookup."""
-    _ = random.Random(seed)
-
-    thread_id_a = f"thread-{_make_id()}"
-    thread_id_b = f"thread-{_make_id()}"
-
-    # Prior thread history (context for agent)
-    prior_thread_a = _medium_thread_history_a(thread_id_a)
-    prior_thread_b = _medium_thread_history_b(thread_id_b)
-
-    inbox = [
-        _medium_calendar_followup(thread_id_a),
-        _medium_vendor_kb_request(),
-        _medium_hr_matter(),
-        _medium_ceo_brief_request(),
-        _medium_newsletter_lookalike(),
-    ]
-
-    thread_history = {
-        thread_id_a: prior_thread_a,
-        thread_id_b: prior_thread_b,
-    }
-    # Link second thread to calendar email
-    inbox[0] = inbox[0].model_copy(update={"thread_id": thread_id_a})
-
-    senders: Dict[str, SenderProfile] = {}
-    for email in inbox:
-        senders[email.sender] = SENDER_REGISTRY.get(
-            email.sender, _unknown_profile(email.sender)
-        )
-
-    return inbox, thread_history, senders
-
-
-def _medium_thread_history_a(thread_id: str) -> List[EmailMessage]:
-    return [
-        EmailMessage(
-            email_id=_make_id(), thread_id=thread_id,
-            subject="Board presentation — scheduling",
-            sender=f"ceo@{INTERNAL_DOMAIN}", sender_display_name="Sarah Chen",
-            recipients=[f"executive-assistant@{INTERNAL_DOMAIN}"],
-            timestamp=_ts(days_ago=3),
-            body="Can you book the Boardroom A for Thursday 2 PM? We need 2 hours.",
-        ),
-        EmailMessage(
-            email_id=_make_id(), thread_id=thread_id,
-            subject="Re: Board presentation — scheduling",
-            sender=f"executive-assistant@{INTERNAL_DOMAIN}",
-            sender_display_name="EA Team",
-            recipients=[f"ceo@{INTERNAL_DOMAIN}"],
-            timestamp=_ts(days_ago=2),
-            body="Boardroom A is available Thursday 2–4 PM. Confirmed and calendar invite sent.",
-            is_reply=True,
-        ),
-    ]
-
-
-def _medium_thread_history_b(thread_id: str) -> List[EmailMessage]:
-    return [
-        EmailMessage(
-            email_id=_make_id(), thread_id=thread_id,
-            subject="SaaS onboarding — data migration questions",
-            sender="support@legit-saas.io", sender_display_name="LegitSaaS Support",
-            recipients=[f"eng-lead@{INTERNAL_DOMAIN}"],
-            timestamp=_ts(days_ago=5),
-            body="Hi, we need your database schema documentation before we can start the migration.",
-        ),
-    ]
-
-
-def _medium_calendar_followup(thread_id: str) -> EmailMessage:
-    eid = _make_id()
-    email = EmailMessage(
-        email_id=eid, thread_id=thread_id,
-        subject="Re: Board presentation — need room change",
-        sender=f"ceo@{INTERNAL_DOMAIN}", sender_display_name="Sarah Chen",
-        recipients=[f"executive-assistant@{INTERNAL_DOMAIN}"],
-        timestamp=_ts(hours_ago=1),
-        body=(
-            "The board has grown — we now have 12 attendees. "
-            "Boardroom A only fits 10. Can you check if the Executive Suite is free Thursday 2–4 PM? "
-            "If not, we'll need to find an external venue — check the approved vendor list in the KB."
-        ),
-        is_reply=True,
-    )
-    object.__setattr__(email, '_true_priority', 'high')
-    object.__setattr__(email, '_true_category', 'executive_request')
-    object.__setattr__(email, '_true_route', 'executive_assistant')
-    object.__setattr__(email, '_is_phishing', False)
-    return email
-
-
-def _medium_vendor_kb_request() -> EmailMessage:
-    eid = _make_id()
-    email = EmailMessage(
-        email_id=eid,
-        subject="Contract amendment — GDPR data processing addendum required",
-        sender="contracts@cloudprovider.com", sender_display_name="CloudProvider Contracts",
-        recipients=[f"legal@{INTERNAL_DOMAIN}"],
-        timestamp=_ts(hours_ago=3),
-        body=(
-            "Hi team,\n\nFollowing recent EU regulatory updates, our legal team requires "
-            "a signed Data Processing Addendum (DPA) before we can process any data "
-            "in EU regions under the new contract. "
-            "Could you confirm whether your standard DPA template covers Article 28 SCCs? "
-            "If not, we have a template we can share.\n\nBest,\nAlex"
-        ),
-    )
-    object.__setattr__(email, '_true_priority', 'high')
-    object.__setattr__(email, '_true_category', 'vendor_contract')
-    object.__setattr__(email, '_true_route', 'legal_team')
-    object.__setattr__(email, '_is_phishing', False)
-    return email
-
-
-def _medium_hr_matter() -> EmailMessage:
-    eid = _make_id()
-    email = EmailMessage(
-        email_id=eid,
-        subject="Confidential: Grievance submission — Engineering team",
-        sender=f"hr-director@{INTERNAL_DOMAIN}", sender_display_name="Linda Kowalski",
-        recipients=[f"ceo@{INTERNAL_DOMAIN}"],
-        timestamp=_ts(hours_ago=2),
-        body=(
-            "Dear Sarah,\n\n"
-            "I'm forwarding a formal grievance submitted by a member of the Engineering team "
-            "regarding workplace conduct. As per policy, this requires your acknowledgment "
-            "within 48 hours. Please treat this as confidential.\n\n"
-            "Full details are in the attached encrypted document. Password sent separately.\n\n"
-            "Linda"
-        ),
-        has_attachments=True,
-        attachment_names=["grievance_ref_2024_0047_encrypted.pdf"],
-    )
-    object.__setattr__(email, '_true_priority', 'critical')
-    object.__setattr__(email, '_true_category', 'hr_matter')
-    object.__setattr__(email, '_true_route', 'ceo_office')
-    object.__setattr__(email, '_is_phishing', False)
-    return email
-
-
-def _medium_ceo_brief_request() -> EmailMessage:
-    eid = _make_id()
-    email = EmailMessage(
-        email_id=eid,
-        subject="Request for Q3 board brief — needed by Thursday",
-        sender=f"ceo@{INTERNAL_DOMAIN}", sender_display_name="Sarah Chen",
-        recipients=[f"cfo@{INTERNAL_DOMAIN}", f"cto@{INTERNAL_DOMAIN}"],
-        timestamp=_ts(hours_ago=5),
-        body=(
-            "Marcus, Priya —\n\n"
-            "I need a combined financial and technical brief for the board meeting Thursday. "
-            "Please coordinate and have a draft in my inbox by Wednesday EOD.\n\n"
-            "Sarah"
-        ),
-    )
-    object.__setattr__(email, '_true_priority', 'critical')
-    object.__setattr__(email, '_true_category', 'executive_request')
-    object.__setattr__(email, '_true_route', 'cfo_office')
-    object.__setattr__(email, '_is_phishing', False)
-    return email
-
-
-def _medium_newsletter_lookalike() -> EmailMessage:
-    eid = _make_id()
-    email = EmailMessage(
-        email_id=eid,
-        subject="🚨 THIS WEEK: Your mandatory security training expires TOMORROW",
-        sender="noreply@newsletter-blast.com",
-        sender_display_name="TechWeekly",
-        recipients=[f"all-staff@{INTERNAL_DOMAIN}"],
-        timestamp=_ts(hours_ago=6),
-        body=(
-            "URGENT NOTICE\n\n"
-            "Your annual cybersecurity awareness training certification expires TOMORROW. "
-            "Click below to complete your training and avoid access suspension:\n"
-            "https://newsletter-blast.com/training-redirect?uid=12345\n\n"
-            "— The TechWeekly Team"
-        ),
-        links=["https://newsletter-blast.com/training-redirect?uid=12345"],
-    )
-    object.__setattr__(email, '_true_priority', 'low')
-    object.__setattr__(email, '_true_category', 'newsletter')
-    object.__setattr__(email, '_true_route', 'archive')
-    object.__setattr__(email, '_is_phishing', False)  # suspicious but technically newsletter
-    return email
-
-
-# ── Hard task emails ─────────────────────────────────────────────────────────
-
-def make_hard_inbox(seed: Optional[int] = None) -> Tuple[
-    List[EmailMessage],
-    Dict[str, List[EmailMessage]],
-    Dict[str, SenderProfile],
-]:
-    """Eight emails: phishing, BEC, real security incident, legitimate urgent, noise."""
-
-    inbox = [
-        _hard_phishing_ceo_spoof(),
-        _hard_phishing_it_password_reset(),
-        _hard_real_security_incident(),
-        _hard_bec_wire_transfer(),
-        _hard_legitimate_urgent_a(),
-        _hard_legitimate_urgent_b(),
-        _hard_legitimate_urgent_c(),
-        _hard_urgent_newsletter(),
-    ]
-
-    # Shuffle to prevent positional bias in grading
-    rng = random.Random(seed)
-    rng.shuffle(inbox)
-
-    senders: Dict[str, SenderProfile] = {}
-    for email in inbox:
-        senders[email.sender] = SENDER_REGISTRY.get(
-            email.sender, _unknown_profile(email.sender)
-        )
-
-    return inbox, {}, senders
-
-
-def _hard_phishing_ceo_spoof() -> EmailMessage:
-    eid = _make_id()
-    email = EmailMessage(
-        email_id=eid,
-        subject="URGENT: Wire transfer authorisation needed immediately",
-        sender=f"ceo@acmecorp-security.com",   # spoofed domain!
-        sender_display_name="Sarah Chen",       # display name matches real CEO
-        recipients=[f"finance@{INTERNAL_DOMAIN}"],
-        timestamp=_ts(hours_ago=0.5),
-        body=(
-            "Hi,\n\n"
-            "I need you to process an urgent wire transfer of $87,500 to a new supplier "
-            "we're onboarding for the Q4 project. This is time-sensitive and must be done "
-            "before market close today. Please treat this as confidential — do not discuss "
-            "with others until the deal is public.\n\n"
-            "Transfer to:\nBank: First National\nRouting: 021000021\nAccount: 8847291045\n\n"
-            "Authorisation code: CEO-2024-Q4-0091\n\n"
-            "Sarah"
-        ),
-    )
-    object.__setattr__(email, '_true_priority', 'spam')
-    object.__setattr__(email, '_true_category', 'phishing')
-    object.__setattr__(email, '_true_route', 'security_team')
-    object.__setattr__(email, '_is_phishing', True)
-    object.__setattr__(email, '_is_bec', True)
-    return email
-
-
-def _hard_phishing_it_password_reset() -> EmailMessage:
-    eid = _make_id()
-    email = EmailMessage(
-        email_id=eid,
-        subject="Action Required: Your corporate password expires in 24 hours",
-        sender="it-helpdesk@acme-corp.net",    # typosquatted domain
-        sender_display_name="IT Helpdesk",
-        recipients=[f"all-staff@{INTERNAL_DOMAIN}"],
-        timestamp=_ts(hours_ago=2),
-        body=(
-            "Dear Employee,\n\n"
-            "Your corporate account password is set to expire in 24 hours. "
-            "To avoid being locked out of company systems, please reset your password immediately:\n\n"
-            "https://acme-corp.net/password-reset?token=CORP2024RESET\n\n"
-            "Enter your current username and password to authenticate, "
-            "then you will be prompted to create a new password.\n\n"
-            "If you do not reset within 24 hours, your account will be suspended "
-            "and you will need to contact HR to reinstate access.\n\n"
-            "IT Helpdesk Team"
-        ),
-        links=["https://acme-corp.net/password-reset?token=CORP2024RESET"],
-    )
-    object.__setattr__(email, '_true_priority', 'spam')
-    object.__setattr__(email, '_true_category', 'phishing')
-    object.__setattr__(email, '_true_route', 'security_team')
-    object.__setattr__(email, '_is_phishing', True)
-    object.__setattr__(email, '_is_bec', False)
-    return email
-
-
-def _hard_real_security_incident() -> EmailMessage:
-    eid = _make_id()
-    email = EmailMessage(
-        email_id=eid,
-        subject="[ALERT] Anomalous login detected — production DB cluster",
-        sender=f"it-support@{INTERNAL_DOMAIN}",   # legitimate internal IT
-        sender_display_name="IT Support Team",
-        recipients=[f"cto@{INTERNAL_DOMAIN}", f"eng-lead@{INTERNAL_DOMAIN}"],
-        timestamp=_ts(minutes_ago=15),
-        body=(
-            "SECURITY ALERT — Immediate Action Required\n\n"
-            "Our SIEM has detected anomalous login activity on the production database cluster "
-            "(prod-db-01, prod-db-02). Activity profile:\n\n"
-            "- Source IP: 185.220.101.47 (flagged as Tor exit node)\n"
-            "- Login attempts: 847 in last 10 minutes (brute-force pattern)\n"
-            "- 3 successful authentications using service account 'db_readonly'\n"
-            "- Data exfiltration pattern detected: 2.3 GB outbound transfer in progress\n\n"
-            "Current status: Automated firewall rules have blocked the IP. "
-            "Service account has been disabled. Investigation in progress.\n\n"
-            "Immediate actions required:\n"
-            "1. Confirm scope of accessed data (PII risk assessment)\n"
-            "2. Rotate all service account credentials\n"
-            "3. Notify CISO and legal team (potential breach notification obligation)\n\n"
-            "— IT Security Monitoring"
-        ),
-    )
-    object.__setattr__(email, '_true_priority', 'critical')
-    object.__setattr__(email, '_true_category', 'security_incident')
-    object.__setattr__(email, '_true_route', 'security_team')
-    object.__setattr__(email, '_is_phishing', False)
-    object.__setattr__(email, '_is_bec', False)
-    return email
-
-
-def _hard_bec_wire_transfer() -> EmailMessage:
-    """BEC from a legitimate-seeming board member email requesting unusual wire."""
-    eid = _make_id()
-    email = EmailMessage(
-        email_id=eid,
-        subject="Confidential acquisition — urgent transfer",
-        sender="r.patel@boardmembers.acmecorp.com",  # Legitimate domain, but BEC request
-        sender_display_name="Raj Patel",
-        recipients=[f"cfo@{INTERNAL_DOMAIN}"],
-        timestamp=_ts(hours_ago=1),
-        body=(
-            "Marcus,\n\n"
-            "I'm reaching out directly regarding a sensitive M&A opportunity "
-            "we've been evaluating at the board level. I can't share details over email "
-            "until the NDA is signed, but we need to move a $250,000 holding deposit "
-            "to escrow by end of day to secure our position.\n\n"
-            "Please do NOT discuss this with Sarah or the rest of the exec team yet — "
-            "timing is critical and premature disclosure could kill the deal.\n\n"
-            "Use the wire details I'll send in a separate follow-up.\n\n"
-            "Raj"
-        ),
-    )
-    object.__setattr__(email, '_true_priority', 'spam')
-    object.__setattr__(email, '_true_category', 'phishing')
-    object.__setattr__(email, '_true_route', 'security_team')
-    object.__setattr__(email, '_is_phishing', True)
-    object.__setattr__(email, '_is_bec', True)
-    return email
-
-
-def _hard_legitimate_urgent_a() -> EmailMessage:
-    eid = _make_id()
-    email = EmailMessage(
-        email_id=eid,
-        subject="Production outage — payments API returning 500s",
-        sender=f"eng-lead@{INTERNAL_DOMAIN}", sender_display_name="James Osei",
-        recipients=[f"cto@{INTERNAL_DOMAIN}", f"it-support@{INTERNAL_DOMAIN}"],
-        timestamp=_ts(hours_ago=0.1),
-        body=(
-            "Priya, IT —\n\n"
-            "Payments API has been returning 500 errors for the last 8 minutes. "
-            "Error rate: 94%. Monitoring dashboard: https://monitoring.acmecorp.com/payments\n\n"
-            "We've rolled back the last deployment but the errors persist. "
-            "Potentially a database connection pool issue. "
-            "On-call engineer is investigating but I'm looping you in given customer impact.\n\n"
-            "James"
-        ),
-        links=["https://monitoring.acmecorp.com/payments"],
-    )
-    object.__setattr__(email, '_true_priority', 'critical')
-    object.__setattr__(email, '_true_category', 'it_support')
-    object.__setattr__(email, '_true_route', 'engineering_team')
-    object.__setattr__(email, '_is_phishing', False)
-    return email
-
-
-def _hard_legitimate_urgent_b() -> EmailMessage:
-    eid = _make_id()
-    email = EmailMessage(
-        email_id=eid,
-        subject="URGENT: Key customer threatening churn — need exec call today",
-        sender=f"sales@{INTERNAL_DOMAIN}", sender_display_name="Sales Team",
-        recipients=[f"ceo@{INTERNAL_DOMAIN}"],
-        timestamp=_ts(hours_ago=2),
-        body=(
-            "Sarah,\n\n"
-            "GlobalRetail Inc (our #2 account, $1.8M ARR) has contacted us this morning "
-            "threatening to terminate their contract. Their VP Engineering is unhappy "
-            "with our SLA performance over Q3 (avg uptime 99.1% vs contracted 99.9%).\n\n"
-            "They're requesting an exec-level call today. I've blocked 3–4 PM on your calendar "
-            "as a placeholder. Can you confirm?\n\n"
-            "— Sales"
-        ),
-    )
-    object.__setattr__(email, '_true_priority', 'critical')
-    object.__setattr__(email, '_true_category', 'customer_escalation')
-    object.__setattr__(email, '_true_route', 'ceo_office')
-    object.__setattr__(email, '_is_phishing', False)
-    return email
-
-
-def _hard_legitimate_urgent_c() -> EmailMessage:
-    eid = _make_id()
-    email = EmailMessage(
-        email_id=eid,
-        subject="Board resolution needed — regulatory filing deadline this Friday",
-        sender="r.patel@boardmembers.acmecorp.com",
-        sender_display_name="Raj Patel",
-        recipients=[f"ceo@{INTERNAL_DOMAIN}", f"cfo@{INTERNAL_DOMAIN}"],
-        timestamp=_ts(hours_ago=3),
-        body=(
-            "Sarah, Marcus,\n\n"
-            "As a reminder, our annual regulatory filing with the SEC has a hard deadline "
-            "this Friday at 5 PM EST. We need a signed board resolution by Thursday noon "
-            "to accompany the filing. Legal has the draft — please review and countersign.\n\n"
-            "This is time-sensitive; missing the deadline carries a $50K fine per day.\n\n"
-            "Raj"
-        ),
-    )
-    object.__setattr__(email, '_true_priority', 'critical')
-    object.__setattr__(email, '_true_category', 'executive_request')
-    object.__setattr__(email, '_true_route', 'legal_team')
-    object.__setattr__(email, '_is_phishing', False)
-    return email
-
-
-def _hard_urgent_newsletter() -> EmailMessage:
-    eid = _make_id()
-    email = EmailMessage(
-        email_id=eid,
-        subject="🔴 BREAKING: Critical vulnerability in OpenSSL — patch NOW",
-        sender="noreply@newsletter-blast.com",
-        sender_display_name="TechWeekly Security Digest",
-        recipients=[f"all-staff@{INTERNAL_DOMAIN}"],
-        timestamp=_ts(hours_ago=4),
-        body=(
-            "BREAKING SECURITY NEWS\n\n"
-            "A critical RCE vulnerability (CVSS 9.8) has been discovered in OpenSSL 3.x. "
-            "Patch your systems immediately.\n\n"
-            "Full details and patch links: https://newsletter-blast.com/openssl-cve-2024\n\n"
-            "Subscribe to TechWeekly Premium for real-time alerts: "
-            "https://newsletter-blast.com/premium\n\n"
-            "— TechWeekly Security Team"
-        ),
-        links=[
-            "https://newsletter-blast.com/openssl-cve-2024",
-            "https://newsletter-blast.com/premium",
-        ],
-    )
-    object.__setattr__(email, '_true_priority', 'low')  # It's a newsletter, not an internal alert
-    object.__setattr__(email, '_true_category', 'newsletter')
-    object.__setattr__(email, '_true_route', 'archive')
-    object.__setattr__(email, '_is_phishing', False)
-    return email
-
-
-# ── Helpers ──────────────────────────────────────────────────────────────────
-
-def _unknown_profile(email_addr: str) -> SenderProfile:
-    domain = email_addr.split("@")[-1] if "@" in email_addr else "unknown"
-    return SenderProfile(
-        email=email_addr,
-        display_name=email_addr,
-        domain=domain,
-        is_internal=domain == INTERNAL_DOMAIN,
-        reputation_score=0.5,
-    )
+def get_email_by_id(task_id: str, email_id: str) -> EmailWithGroundTruth:
+    """Return a specific email from a task by its ID."""
+    emails = get_emails_for_task(task_id)
+    for email in emails:
+        if email.id == email_id:
+            return email
+    raise ValueError(f"Email '{email_id}' not found in task '{task_id}'")
