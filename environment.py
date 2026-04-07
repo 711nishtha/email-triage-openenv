@@ -96,6 +96,11 @@ class EmailTriageEnvironment:
                 max_steps=self.max_steps,
             )
             reward = reward_info["reward"]
+            # Clamp reward to open interval (0,1) – never exact 0.0 or 1.0
+            if reward <= 0.0:
+                reward = 0.001
+            elif reward >= 1.0:
+                reward = 0.999
             self.done = True
             self.cumulative_reward = reward
             info["episode_summary"] = reward_info.get("episode_summary")
@@ -121,7 +126,9 @@ class EmailTriageEnvironment:
                 message=f"Tool '{action.tool_name}' executed.",
                 last_tool_result=result,
             )
-            return obs, 0.0, done, info
+            # Tool reward is always 0.001 (never 0)
+            tool_reward = 0.001
+            return obs, tool_reward, done, info
 
         # ── escalate action ──────────────────────────────────
         if action.action_type == ActionType.escalate:
@@ -130,7 +137,7 @@ class EmailTriageEnvironment:
             if email is None:
                 info["error"] = f"Email ID '{email_id}' not found"
                 obs = self._build_observation(message=f"Error: Email '{email_id}' not found.")
-                return obs, 0.0, False, info
+                return obs, 0.001, False, info
 
             triage_record = {
                 "email_id": email_id,
@@ -156,6 +163,11 @@ class EmailTriageEnvironment:
                 max_steps=self.max_steps,
             )
             reward = reward_info["reward"]
+            # Clamp
+            if reward <= 0.0:
+                reward = 0.001
+            elif reward >= 1.0:
+                reward = 0.999
             self.cumulative_reward += reward
             obs = self._build_observation(message=f"Email '{email_id}' escalated.")
             return obs, reward, self._check_done(), info
@@ -167,14 +179,14 @@ class EmailTriageEnvironment:
             if email is None:
                 info["error"] = f"Email ID '{email_id}' not found"
                 obs = self._build_observation(message=f"Error: Email '{email_id}' not found.")
-                return obs, 0.0, False, info
+                return obs, 0.001, False, info
 
             # Already triaged?
             already_triaged = any(a["email_id"] == email_id for a in self.triaged_actions)
             if already_triaged:
                 info["warning"] = f"Email '{email_id}' already triaged"
                 obs = self._build_observation(message=f"Warning: Email '{email_id}' was already triaged.")
-                return obs, 0.0, False, info
+                return obs, 0.001, False, info
 
             triage_record = {
                 "email_id": email_id,
@@ -199,6 +211,11 @@ class EmailTriageEnvironment:
                 max_steps=self.max_steps,
             )
             reward = reward_info["reward"]
+            # Clamp
+            if reward <= 0.0:
+                reward = 0.001
+            elif reward >= 1.0:
+                reward = 0.999
             self.cumulative_reward += reward
 
             remaining = len(self.inbox)
@@ -211,7 +228,7 @@ class EmailTriageEnvironment:
         # Unknown action type
         info["error"] = f"Unknown action_type: {action.action_type}"
         obs = self._build_observation(message=f"Error: Unknown action type.")
-        return obs, 0.0, False, info
+        return obs, 0.001, False, info
 
     # ─────────────────────────────────────────
     # state()
