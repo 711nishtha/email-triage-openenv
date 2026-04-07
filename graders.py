@@ -11,7 +11,7 @@ Penalties applied at episode end:
   - Missed urgent email:       -0.3 per email
   - Phishing misclassified:    -0.4 per email
 
-Final episode score is clamped to [0.0, 1.0].
+Final episode score is clamped to [0.001, 0.999] to satisfy validator requirements.
 """
 
 from __future__ import annotations
@@ -23,12 +23,10 @@ from models import EmailWithGroundTruth
 # Per-Email Scoring
 # ─────────────────────────────────────────────
 
-# Weights
 WEIGHT_CATEGORY = 0.4
 WEIGHT_PRIORITY = 0.3
 WEIGHT_ROUTE = 0.3
 
-# Penalties
 PENALTY_MISSED_URGENT = 0.3
 PENALTY_PHISHING_MISS = 0.4
 
@@ -39,11 +37,7 @@ def grade_single_action(
     action_route: str,
     email: EmailWithGroundTruth,
 ) -> Tuple[float, Dict[str, Any]]:
-    """
-    Score a single triage action against the ground truth for one email.
-    Returns (score, breakdown_dict).
-    Score is in [0.0, 1.0].
-    """
+    """Score a single triage action. Returns (score, breakdown)."""
     score = 0.0
     breakdown = {
         "email_id": email.id,
@@ -62,35 +56,32 @@ def grade_single_action(
         "got_route": action_route,
     }
 
-    # Category scoring
+    # Category
     if action_category == email.expected_category:
         score += WEIGHT_CATEGORY
         breakdown["category_correct"] = True
         breakdown["category_score"] = WEIGHT_CATEGORY
     else:
-        # Partial credit for adjacent categories
         partial = _partial_category_credit(action_category, email.expected_category)
         score += partial
         breakdown["category_score"] = partial
 
-    # Priority scoring
+    # Priority
     if action_priority == email.expected_priority:
         score += WEIGHT_PRIORITY
         breakdown["priority_correct"] = True
         breakdown["priority_score"] = WEIGHT_PRIORITY
     else:
-        # Partial credit for adjacent priority levels
         partial = _partial_priority_credit(action_priority, email.expected_priority)
         score += partial
         breakdown["priority_score"] = partial
 
-    # Routing scoring
+    # Routing
     if action_route == email.expected_route:
         score += WEIGHT_ROUTE
         breakdown["route_correct"] = True
         breakdown["route_score"] = WEIGHT_ROUTE
     else:
-        # Small partial credit for routing to a relevant-but-not-optimal destination
         partial = _partial_route_credit(action_route, email.expected_route)
         score += partial
         breakdown["route_score"] = partial
@@ -100,13 +91,11 @@ def grade_single_action(
 
 
 def _partial_category_credit(got: str, expected: str) -> float:
-    """Partial credit for near-correct categories."""
-    # Define adjacency groups
     adjacency = {
         frozenset({"urgent_business", "internal_task"}): 0.1,
         frozenset({"spam", "marketing"}): 0.2,
         frozenset({"legal", "finance"}): 0.1,
-        frozenset({"phishing", "spam"}): 0.0,  # No credit for confusing phishing with spam
+        frozenset({"phishing", "spam"}): 0.0,
         frozenset({"it_support", "internal_task"}): 0.1,
         frozenset({"hr", "internal_task"}): 0.1,
     }
@@ -115,7 +104,6 @@ def _partial_category_credit(got: str, expected: str) -> float:
 
 
 def _partial_priority_credit(got: str, expected: str) -> float:
-    """Partial credit for adjacent priority levels."""
     priority_order = ["urgent", "high", "medium", "low"]
     try:
         got_idx = priority_order.index(got)
@@ -124,7 +112,7 @@ def _partial_priority_credit(got: str, expected: str) -> float:
         if distance == 0:
             return WEIGHT_PRIORITY
         elif distance == 1:
-            return WEIGHT_PRIORITY * 0.5  # 0.15 partial
+            return WEIGHT_PRIORITY * 0.5
         else:
             return 0.0
     except ValueError:
@@ -132,7 +120,6 @@ def _partial_priority_credit(got: str, expected: str) -> float:
 
 
 def _partial_route_credit(got: str, expected: str) -> float:
-    """Partial credit for sending to related-but-wrong routing target."""
     route_groups = {
         frozenset({"executive", "manager"}): 0.15,
         frozenset({"it", "security"}): 0.1,
@@ -152,57 +139,35 @@ def grade_episode(
     task_emails: List[EmailWithGroundTruth],
     triaged_actions: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    """
-    Grade the entire episode.
+    """Grade the entire episode. Returns dict with episode_score in [0.001, 0.999]."""
+    action_map = {a["email_id"]: a for a in triaged_actions}
 
-    Args:
-        task_emails: All emails in the task (with ground truth).
-        triaged_actions: List of dicts with keys:
-            email_id, category, priority, route_to
-
-    Returns dict with:
-        episode_score: float in [0.0, 1.0]
-        per_email_scores: list of breakdowns
-        penalties: list of applied penalties
-        raw_score: float before penalty clamping
-        num_triaged: int
-    """
-    # Build lookup of actions by email_id
-    action_map: Dict[str, Dict[str, Any]] = {a["email_id"]: a for a in triaged_actions}
-
-    per_email_scores: List[Dict[str, Any]] = []
+    per_email_scores = []
     total_raw = 0.0
-    penalties: List[Dict[str, Any]] = []
+    penalties = []
     total_penalty = 0.0
 
     for email in task_emails:
         action = action_map.get(email.id)
 
         if action is None:
-            # Email was never triaged — apply penalties for urgent/phishing misses
             if email.expected_priority == "urgent":
-                penalty = PENALTY_MISSED_URGENT
-                total_penalty += penalty
+                total_penalty += PENALTY_MISSED_URGENT
                 penalties.append({
                     "email_id": email.id,
                     "type": "missed_urgent",
-                    "penalty": -penalty,
+                    "penalty": -PENALTY_MISSED_URGENT,
                     "reason": f"Urgent email '{email.id}' was never triaged",
                 })
             if email.expected_category == "phishing":
-                penalty = PENALTY_PHISHING_MISS
-                total_penalty += penalty
+                total_penalty += PENALTY_PHISHING_MISS
                 penalties.append({
                     "email_id": email.id,
                     "type": "missed_phishing",
-                    "penalty": -penalty,
+                    "penalty": -PENALTY_PHISHING_MISS,
                     "reason": f"Phishing email '{email.id}' was never identified",
                 })
-            per_email_scores.append({
-                "email_id": email.id,
-                "total_score": 0.0,
-                "reason": "Not triaged",
-            })
+            per_email_scores.append({"email_id": email.id, "total_score": 0.0, "reason": "Not triaged"})
         else:
             score, breakdown = grade_single_action(
                 action_category=action.get("category", ""),
@@ -210,29 +175,29 @@ def grade_episode(
                 action_route=action.get("route_to", ""),
                 email=email,
             )
-
-            # Additional penalty: phishing misclassified as something non-security
             if email.expected_category == "phishing" and action.get("category") != "phishing":
-                penalty = PENALTY_PHISHING_MISS
-                total_penalty += penalty
+                total_penalty += PENALTY_PHISHING_MISS
                 penalties.append({
                     "email_id": email.id,
                     "type": "phishing_misclassified",
-                    "penalty": -penalty,
+                    "penalty": -PENALTY_PHISHING_MISS,
                     "reason": f"Phishing email classified as '{action.get('category')}'",
                 })
-
             total_raw += score
             per_email_scores.append(breakdown)
 
-    # Normalize by email count
     num_emails = len(task_emails)
     avg_score = total_raw / num_emails if num_emails > 0 else 0.0
-
-    # Apply penalties (as reduction on normalized score)
     penalty_rate = total_penalty / num_emails if num_emails > 0 else 0.0
     final_score = avg_score - penalty_rate
-    final_score = round(max(0.0, min(1.0, final_score)), 4)
+
+    # Clamp to [0.001, 0.999] — NEVER allow exact 0.0 or 1.0
+    if final_score <= 0.0:
+        final_score = 0.001
+    elif final_score >= 1.0:
+        final_score = 0.999
+
+    final_score = round(final_score, 4)
 
     return {
         "episode_score": final_score,
@@ -246,10 +211,6 @@ def grade_episode(
     }
 
 
-# ─────────────────────────────────────────────
-# Step-Level Reward (Dense)
-# ─────────────────────────────────────────────
-
 def compute_step_reward(
     action_type: str,
     email: Optional[EmailWithGroundTruth],
@@ -257,17 +218,18 @@ def compute_step_reward(
     action_priority: Optional[str],
     action_route: Optional[str],
 ) -> float:
-    """
-    Compute immediate step reward for a single action.
-    Returns value in [0.0, 1.0] for triage actions, 0.0 for tool/escalate/done.
-    """
+    """Step reward for a single action (clamped to [0.001, 0.999] if non-zero)."""
     if action_type != "triage" or email is None:
-        return 0.0  # No immediate reward for non-triage actions
-
+        return 0.0
     score, _ = grade_single_action(
         action_category=action_category or "",
         action_priority=action_priority or "",
         action_route=action_route or "",
         email=email,
     )
+    # Step reward can be 0.0 for non-triage actions, but for triage actions we also avoid 0.0/1.0
+    if score <= 0.0:
+        return 0.001
+    elif score >= 1.0:
+        return 0.999
     return score
