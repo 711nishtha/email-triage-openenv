@@ -8,21 +8,21 @@ from typing import Any, Dict, List
 from openai import OpenAI
 
 # ─────────────────────────────────────────────
-# Config (STRICT — NO FALLBACKS FOR LLM)
+# Config (CORRECT HYBRID MODE)
 # ─────────────────────────────────────────────
 
-API_BASE_URL = os.environ["API_BASE_URL"]
-MODEL_NAME = os.environ["MODEL_NAME"]
-API_KEY = os.environ["API_KEY"]
+API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-3.5-turbo")
+API_KEY = os.environ["API_KEY"]  # STRICT
 
-ENV_URL = os.environ.get("ENV_URL", "http://localhost:7860")
-TASK_ID = os.environ.get("TASK_ID", "medium")
+ENV_URL = os.getenv("ENV_URL", "http://localhost:7860")
+TASK_ID = os.getenv("TASK_ID", "medium")
 ENV_NAME = "advanced-enterprise-email-triage"
 MAX_STEPS = 30
 REQUEST_TIMEOUT = 30
 
 # ─────────────────────────────────────────────
-# OpenAI Client (MANDATORY PROXY USAGE)
+# OpenAI Client
 # ─────────────────────────────────────────────
 
 client = OpenAI(
@@ -30,10 +30,6 @@ client = OpenAI(
     base_url=API_BASE_URL,
     timeout=REQUEST_TIMEOUT,
 )
-
-# ─────────────────────────────────────────────
-# Environment HTTP Client
-# ─────────────────────────────────────────────
 
 http_client = httpx.Client(timeout=REQUEST_TIMEOUT)
 
@@ -50,64 +46,51 @@ def step_env(action: Dict[str, Any]) -> Dict[str, Any]:
     return resp.json()
 
 
-# ─────────────────────────────────────────────
-# Prompt
-# ─────────────────────────────────────────────
+SYSTEM_PROMPT = """You are an enterprise email triage agent.
 
-SYSTEM_PROMPT = """You are an enterprise email triage specialist.
-
-Classify each email with:
-- priority
-- category
-- route_to
-
-Return ONLY valid JSON:
+Return ONLY JSON:
 {"action_type":"triage","email_id":"<id>","priority":"<p>","category":"<c>","route_to":"<r>"}
 OR {"action_type":"done"}
 """
 
 
-def build_user_message(observation: Dict[str, Any]) -> str:
-    inbox = observation.get("inbox", [])
-    step = observation.get("step_count", 0)
-    max_steps = observation.get("max_steps", 30)
+def build_user_message(obs: Dict[str, Any]) -> str:
+    inbox = obs.get("inbox", [])
+    step = obs.get("step_count", 0)
+    max_steps = obs.get("max_steps", 30)
 
-    lines = [f"Step {step}/{max_steps}"]
+    msg = [f"Step {step}/{max_steps}"]
 
-    for email in inbox:
-        lines.append(f"""
-ID: {email['id']}
-From: {email['sender']}
-Subject: {email['subject']}
-Body: {email['body']}
+    for e in inbox:
+        msg.append(f"""
+ID: {e['id']}
+From: {e['sender']}
+Subject: {e['subject']}
+Body: {e['body']}
 ---""")
 
     if not inbox:
-        lines.append("All emails processed. Call done.")
+        msg.append("All emails processed. Call done.")
 
-    return "\n".join(lines)
+    return "\n".join(msg)
 
 
 def parse_action(text: str) -> Dict[str, Any]:
     import re
-    match = re.search(r'\{.*?\}', text, re.DOTALL)
-    if match:
+    m = re.search(r'\{.*?\}', text, re.DOTALL)
+    if m:
         try:
-            return json.loads(match.group())
+            return json.loads(m.group())
         except:
             pass
     return {"action_type": "done"}
 
 
-# ─────────────────────────────────────────────
-# Main Loop
-# ─────────────────────────────────────────────
-
 def run_inference(task_id: str = TASK_ID) -> None:
     print(f"[START] task={task_id} env={ENV_NAME} model={MODEL_NAME}")
 
     try:
-        observation = reset_env(task_id)
+        obs = reset_env(task_id)
     except:
         print("[END] success=false steps=0 score=0.00 rewards=")
         return
@@ -118,22 +101,21 @@ def run_inference(task_id: str = TASK_ID) -> None:
 
     while not done and step < MAX_STEPS:
         step += 1
-
-        user_message = build_user_message(observation)
-
         error_str = None
 
+        user_msg = build_user_message(obs)
+
         try:
-            completion = client.chat.completions.create(
+            resp = client.chat.completions.create(
                 model=MODEL_NAME,
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_message},
+                    {"role": "user", "content": user_msg},
                 ],
                 temperature=0.0,
                 max_tokens=300,
             )
-            action_str = completion.choices[0].message.content or ""
+            action_str = resp.choices[0].message.content or ""
         except Exception as e:
             action_str = json.dumps({"action_type": "done"})
             error_str = str(e)
@@ -141,10 +123,9 @@ def run_inference(task_id: str = TASK_ID) -> None:
         action = parse_action(action_str)
 
         reward = 0.0
-
         try:
             result = step_env(action)
-            observation = result["observation"]
+            obs = result["observation"]
             reward = float(result["reward"])
             done = bool(result["done"])
             rewards.append(reward)
@@ -152,18 +133,12 @@ def run_inference(task_id: str = TASK_ID) -> None:
             error_str = str(e)
             done = True
 
-        action_display = action.get("action_type", "unknown")
         error_log = "null" if error_str is None else error_str[:100]
 
         print(
-            f"[STEP] step={step} "
-            f"action={action_display} "
-            f"reward={reward:.2f} "
-            f"done={'true' if done else 'false'} "
-            f"error={error_log}"
+            f"[STEP] step={step} action={action.get('action_type','unknown')} "
+            f"reward={reward:.2f} done={'true' if done else 'false'} error={error_log}"
         )
-
-    # ───── FINAL LOG (FIXED) ─────
 
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
 
