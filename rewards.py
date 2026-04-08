@@ -1,7 +1,3 @@
-"""
-rewards.py — Dense reward computation for the email triage environment.
-"""
-
 from __future__ import annotations
 from typing import Any, Dict, List, Optional
 from models import EmailWithGroundTruth
