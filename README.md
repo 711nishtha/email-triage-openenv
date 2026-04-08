@@ -15,7 +15,7 @@ tags:
 
 An **OpenEnv** reinforcement learning environment where AI agents learn to triage enterprise emails with real-world complexity: thread awareness, phishing detection, tool usage, priority routing, and SLA management across **3 difficulty tiers (30+ tasks)**.
 
-> **[API Docs](http://localhost:7860/docs)** | **[Playground](http://localhost:7860/web)**
+> **[HF Space](https://huggingface.co/spaces/nishtha711/email-triage-openenv)**
 
 ---
 
