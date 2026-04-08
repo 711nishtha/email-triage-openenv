@@ -1,5 +1,5 @@
 """
-graders.py — Deterministic graders with final score clamped to (0,1).
+graders.py — Ensures raw scores are strictly between 0 and 1 (never exact).
 """
 
 from __future__ import annotations
@@ -11,6 +11,8 @@ WEIGHT_PRIORITY = 0.3
 WEIGHT_ROUTE = 0.3
 PENALTY_MISSED_URGENT = 0.3
 PENALTY_PHISHING_MISS = 0.4
+
+EPS = 0.0001  # tiny epsilon to avoid exact 0.0 or 1.0
 
 def grade_single_action(
     action_category: str,
@@ -62,8 +64,14 @@ def grade_single_action(
         partial = _partial_route_credit(action_route, email.expected_route)
         score += partial
         breakdown["route_score"] = partial
-    breakdown["total_score"] = round(min(1.0, max(0.0, score)), 4)
-    return breakdown["total_score"], breakdown
+
+    # Clamp to [0,1] but subtract epsilon if at boundaries
+    if score <= 0.0:
+        score = EPS
+    elif score >= 1.0:
+        score = 1.0 - EPS
+    breakdown["total_score"] = round(score, 4)
+    return score, breakdown
 
 def _partial_category_credit(got: str, expected: str) -> float:
     adjacency = {
@@ -116,7 +124,8 @@ def grade_episode(
             if email.expected_category == "phishing":
                 total_penalty += PENALTY_PHISHING_MISS
                 penalties.append({"email_id": email.id, "type": "missed_phishing", "penalty": -PENALTY_PHISHING_MISS})
-            per_email_scores.append({"email_id": email.id, "total_score": 0.0})
+            per_email_scores.append({"email_id": email.id, "total_score": EPS})
+            total_raw += EPS  # tiny reward for not triaging? Actually no, but keep score positive
         else:
             score, breakdown = grade_single_action(
                 action.get("category", ""),
@@ -130,14 +139,16 @@ def grade_episode(
             total_raw += score
             per_email_scores.append(breakdown)
     num = len(task_emails)
-    avg = total_raw / num if num > 0 else 0.0
-    penalty_rate = total_penalty / num if num > 0 else 0.0
+    if num == 0:
+        return {"episode_score": 0.5, "raw_score": 0.0, "penalty_total": 0.0, "per_email_scores": [], "penalties": [], "num_triaged": 0, "num_emails": 0, "coverage": 0.0}
+    avg = total_raw / num
+    penalty_rate = total_penalty / num
     final = avg - penalty_rate
-    # CRITICAL: clamp to (0,1) – never 0.0 or 1.0
+    # Final clamping to open interval
     if final <= 0.0:
-        final = 0.001
+        final = EPS
     elif final >= 1.0:
-        final = 0.999
+        final = 1.0 - EPS
     final = round(final, 4)
     return {
         "episode_score": final,
@@ -158,15 +169,12 @@ def compute_step_reward(
     action_route: Optional[str],
 ) -> float:
     if action_type != "triage" or email is None:
-        return 0.001  # never zero
+        return EPS
     score, _ = grade_single_action(
         action_category or "",
         action_priority or "",
         action_route or "",
         email
     )
-    if score <= 0.0:
-        return 0.001
-    if score >= 1.0:
-        return 0.999
+    # Already clamped in grade_single_action
     return score
