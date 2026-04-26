@@ -17,7 +17,7 @@ tags:
 [![HF Space](https://img.shields.io/badge/🤗%20Space-Live-blue)](https://huggingface.co/spaces/nishtha711/email-triage-openenv)
 [![Blog Post](https://img.shields.io/badge/📝%20Blog-HuggingFace-orange)]([https://huggingface.co/blog/nishtha711/email-triage-agent-society](https://huggingface.co/spaces/nishtha711/email-triage-openenv/blob/main/BLOG.md))
 [![GitHub](https://img.shields.io/badge/GitHub-711nishtha-black)](https://github.com/711nishtha/email-triage-openenv)
-[![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
+
 
 ---
 
