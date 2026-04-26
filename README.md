@@ -11,7 +11,7 @@ tags:
   - openenv
 ---
 
-# 📧 Email Triage Agent Society
+# Email Triage Agent Society
 ### Meta PyTorch OpenEnv Hackathon 2026 — Grand Finale Submission
 
 [![HF Space](https://img.shields.io/badge/🤗%20Space-Live-blue)](https://huggingface.co/spaces/nishtha711/email-triage-openenv)
@@ -21,7 +21,7 @@ tags:
 
 ---
 
-## 🔗 Submission Materials
+## Submission Materials
 
 | Resource | Link |
 |----------|------|
@@ -48,7 +48,7 @@ This environment makes it hard in the right ways:
 
 ---
 
-## 🏆 The Agent Society
+## The Agent Society
 
 Instead of one LLM making every decision, we deploy **5 specialized agents** on a Shared Blackboard:
 
@@ -82,7 +82,7 @@ Instead of one LLM making every decision, we deploy **5 specialized agents** on 
 
 ---
 
-## 🛡️ Safety by Design
+## Safety by Design
 
 Three independent layers — ALL must fail simultaneously for a phishing miss:
 
@@ -94,7 +94,7 @@ No hallucination possible on safety-critical decisions. No jailbreak can bypass 
 
 ---
 
-## 📈 Adaptive Curriculum
+## Adaptive Curriculum
 
 ```
 Phase 0 (warmup):      Easy only         phishing_ratio=15%
@@ -108,7 +108,7 @@ Regression: avg < 0.35 for 5 episodes → drop one phase
 
 ---
 
-## 🔌 API Endpoints
+## API Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -127,12 +127,12 @@ curl -X POST https://nishtha711-email-triage-openenv.hf.space/reset | python -m 
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
 pip install -r requirements.txt
 
-# Local testing with Groq (free)
+# Local testing with Groq 
 export API_BASE_URL=https://api.groq.com/openai/v1
 export API_KEY=your_groq_key
 export MODEL_NAME=llama-3.1-8b-instant
@@ -144,7 +144,7 @@ python inference.py
 
 ---
 
-## 📊 Results
+## Results
 
 | Task Tier | Single Agent | Agent Society | Δ |
 |-----------|-------------|---------------|---|
@@ -156,7 +156,7 @@ python inference.py
 
 ---
 
-## 📁 Structure
+## Structure
 
 ```
 email-triage-openenv/
