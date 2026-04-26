@@ -26,7 +26,7 @@ tags:
 | Resource | Link |
 |----------|------|
 | 🤗 **Live HuggingFace Space** | https://huggingface.co/spaces/nishtha711/email-triage-openenv |
-| 📝 **HuggingFace Blog Post** | https://huggingface.co/blog/nishtha711/email-triage-agent-society |
+| 📝 **HuggingFace Blog** | [https://huggingface.co/blog/nishtha711/email-triage-agent-society](https://huggingface.co/spaces/nishtha711/email-triage-openenv/blob/main/BLOG.md) |
 | 💻 **GitHub Repo** | https://github.com/711nishtha/email-triage-openenv |
 | 📓 **Colab Training Notebook** | `colab_grpo_training.ipynb` (in this repo — run to reproduce all plots) |
 
