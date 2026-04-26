@@ -21,7 +21,7 @@ tags:
 
 ---
 
-## 🔗 Submission Materials (Judges: start here)
+## 🔗 Submission Materials
 
 | Resource | Link |
 |----------|------|
@@ -29,7 +29,6 @@ tags:
 | 📝 **HuggingFace Blog Post** | https://huggingface.co/blog/nishtha711/email-triage-agent-society |
 | 💻 **GitHub Repo** | https://github.com/711nishtha/email-triage-openenv |
 | 📓 **Colab Training Notebook** | `colab_grpo_training.ipynb` (in this repo — run to reproduce all plots) |
-| 📊 **Training Run (W&B)** | *(replace with your W&B link after running the notebook)* |
 
 ---
 
@@ -181,5 +180,3 @@ email-triage-openenv/
 └── Dockerfile
 ```
 
-## License
-MIT
