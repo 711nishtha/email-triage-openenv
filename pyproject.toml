@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openenv-email-triage"
+version = "2.0.0"
+description = "Email Triage Agent Society — Meta PyTorch OpenEnv Hackathon 2026 Grand Finale"
+requires-python = "==3.12.*"
+dependencies = [
+    "openenv-core[core]>=0.2.2",
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.29.0",
+    "pydantic>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "openai>=1.30.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.4.0",
+]
+
+[project.scripts]
+# Server entry point: uvicorn server.app:app --host 0.0.0.0 --port 7860
+serve = "server.app:main"
+
+[tool.setuptools]
+include-package-data = true
+packages = ["server", "server.services", "agents", "curriculum"]
+
+[tool.pytest.ini_options]
+addopts = "--import-mode=importlib"
+testpaths = ["server/tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
